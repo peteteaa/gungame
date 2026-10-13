@@ -16,7 +16,7 @@ export const PLAYER = {
   radius: 0.4, // half-width of the player's square footprint (AABB)
   height: 1.8, // feet to top of head
   eyeHeight: 1.6, // feet to camera
-  moveSpeed: 6, // units / second
+  moveSpeed: 8, // units / second
   jumpVelocity: 7,
   gravity: 20,
 };
