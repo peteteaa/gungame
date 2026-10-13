@@ -89,6 +89,14 @@ function sanitizeUsername(name) {
   return clean || `Player${Math.floor(Math.random() * 1000)}`;
 }
 
+// Temporary target for solo testing: every room gets a stationary "Dummy" that respawns in place. Only a player
+// named DUMMY_KILLER (any case) can damage it, and killing it grants a tier upgrade like a real kill; everyone
+// else's shots stop at it harmlessly. Disable with TEST_DUMMY=0.
+const TEST_DUMMY = process.env.TEST_DUMMY !== '0';
+const DUMMY_ID = 'dummy';
+const DUMMY_KILLER = 'ggez';
+const DUMMY_SPOT = MAP.dummySpot ?? MAP.spawnPoints[0];
+
 function newPlayer(id, username, now) {
   return {
     id, username,
@@ -105,9 +113,11 @@ export class Room {
     this.players = new Map(); // socketId -> player
     this.matchActive = true;
     this.restartTimer = null;
+    if (TEST_DUMMY) this.addDummy();
   }
 
-  get size() { return this.players.size; }
+  // Human players only; the test dummy doesn't keep a room alive or take a slot.
+  get size() { return this.players.size - (this.players.has(DUMMY_ID) ? 1 : 0); }
   emit(event, payload) { this.io.to(this.id).emit(event, payload); }
 
   serialize(p) {
@@ -136,6 +146,14 @@ export class Room {
   placeAt(p, spawn, now) {
     Object.assign(p, { x: spawn.x, y: 0, z: spawn.z, ry: Math.atan2(spawn.x, spawn.z), rx: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0, airStart: null });
     p.history = [{ t: now, x: p.x, y: p.y, z: p.z }];
+  }
+
+  spawnFor(p) { return p.isDummy ? DUMMY_SPOT : this.pickSpawn(p.id); }
+
+  addDummy(now = Date.now()) {
+    const p = { ...newPlayer(DUMMY_ID, 'Dummy', now), isDummy: true };
+    this.placeAt(p, DUMMY_SPOT, now);
+    this.players.set(p.id, p);
   }
 
   addPlayer(socket, username, now = Date.now()) {
@@ -333,6 +351,7 @@ export class Room {
 
   applyDamage(attacker, target, damage, now, weapon = getWeapon(attacker.tier), headshot = false) {
     if (!target.alive || !this.matchActive) return;
+    if (target.isDummy && attacker.username.toLowerCase() !== DUMMY_KILLER) return;
     target.health = Math.max(0, target.health - damage);
     this.emit(EVENTS.PLAYER_HIT, { targetId: target.id, attackerId: attacker.id, health: target.health, damage, headshot });
     if (target.health <= 0) this.handleKill(attacker, target, now, weapon, headshot);
@@ -361,7 +380,7 @@ export class Room {
     p.health = MAX_HEALTH;
     p.alive = true;
     this.refillAmmo(p);
-    this.placeAt(p, this.pickSpawn(p.id), now);
+    this.placeAt(p, this.spawnFor(p), now);
     this.emit(EVENTS.PLAYER_RESPAWN, { id: p.id, x: p.x, y: p.y, z: p.z });
   }
 
@@ -380,7 +399,7 @@ export class Room {
       this.refillAmmo(p);
     }
     for (const p of this.players.values()) {
-      this.placeAt(p, this.pickSpawn(p.id), now);
+      this.placeAt(p, this.spawnFor(p), now);
       p.alive = true;
     }
     this.matchActive = true;

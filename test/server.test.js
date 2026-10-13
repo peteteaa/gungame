@@ -409,3 +409,30 @@ test('a kill upgrade refills the new weapon and cancels a reload', async () => {
   a.socket.disconnect();
   b.socket.disconnect();
 });
+
+test('only a player named ggez can kill the test dummy; it respawns in place', async () => {
+  const other = await joinPlayer('Trainee');
+  const room = server.game.socketRoom.get(other.joined.id);
+  const dummy = room.players.get('dummy');
+  assert.ok(dummy && other.joined.players.dummy, 'room should include the dummy');
+  assert.equal(server.game.stats().players, 1); // the dummy isn't a connected player
+  dummy.health = 10;
+
+  place(other.joined.id, 0, 16);
+  const ignored = silent(other.socket, EVENTS.PLAYER_HIT);
+  fireAt(other.socket, { x: 0, z: 16 }, { x: 0, y: 0, z: -1 });
+  assert.ok(await ignored, 'other players do no damage to the dummy');
+  assert.equal(dummy.health, 10);
+
+  const ggez = await joinPlayer('GGEZ'); // any case
+  place(other.joined.id, -10, 16); // out of the line of fire
+  place(ggez.joined.id, 0, 16);
+  const upgrade = once(ggez.socket, EVENTS.TIER_UPGRADE);
+  const respawn = once(ggez.socket, EVENTS.PLAYER_RESPAWN, 4000);
+  fireAt(ggez.socket, { x: 0, z: 16 }, { x: 0, y: 0, z: -1 });
+  assert.deepEqual(await upgrade, { id: ggez.joined.id, newTier: 2 });
+  const r = await respawn;
+  assert.deepEqual([r.id, r.x, r.z], ['dummy', 0, 10]);
+  other.socket.disconnect();
+  ggez.socket.disconnect();
+});
