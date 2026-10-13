@@ -30,8 +30,8 @@ between snapshots. The server never trusts the client for outcomes:
 
 | Check | Where |
 |---|---|
-| Movement speed / bounds — implausible moves get a `positionCorrection` | `Room.handleMove` |
-| Fire rate per weapon | `Room.handleFire` |
+| Movement: time-based speed budget (spamming moves buys no extra distance), map bounds, no clipping into boxes, no climbing higher than a jump — violations get a `positionCorrection` | `Room.handleMove` |
+| Fire rate per weapon (jitter tolerance can't raise the sustained rate) | `Room.handleFire` |
 | Shot origin must be within 2 units of the shooter's server-side eye position | `Room.handleFire` |
 | Hit detection: ray vs. player hitboxes, occluded by map geometry, limited by weapon range | `Room.handleFire` |
 | Shotgun spread is rolled server-side (clients can't send perfectly tight pellets) | `applySpread` |
@@ -47,7 +47,7 @@ npm test
 ```
 
 Integration tests run real Socket.io clients against a real server on a random port
-(joining, movement correction, 3-shot pistol kill + upgrade + respawn, fire-rate limit,
+(joining, movement correction, speed/fly/wall-clip exploits, 3-shot pistol kill + upgrade + respawn, fire-rate limit,
 wall occlusion, spoofed origins, lag compensation, knife range, match win/restart, room cleanup).
 
 ## Deploy

@@ -222,7 +222,7 @@ function updateRemotes() {
 let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = (now - last) / 1000;
+  const dt = Math.max(0, (now - last) / 1000); // first rAF timestamp can precede `last`
   last = now;
 
   if (joined) {

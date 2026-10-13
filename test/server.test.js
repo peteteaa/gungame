@@ -122,6 +122,50 @@ test('fire rate is enforced server-side', async () => {
   b.socket.disconnect();
 });
 
+test('spamming tiny moves cannot exceed max speed', async () => {
+  const { socket, joined } = await joinPlayer('Speeder');
+  const { p } = place(joined.id, -10, 5, { lastMoveAt: Date.now() });
+  for (let i = 1; i <= 20; i++) socket.emit(EVENTS.PLAYER_MOVE, { x: -10 + i * 0.7, y: 0, z: 5, ry: 0, rx: 0 });
+  await new Promise((r) => setTimeout(r, 150));
+  assert.ok(p.x - -10 < 3, `moved ${(p.x + 10).toFixed(2)} units in ~150ms`);
+  socket.disconnect();
+});
+
+test('spamming upward moves cannot fly', async () => {
+  const { socket, joined } = await joinPlayer('Flyer');
+  const { p } = place(joined.id, -10, 5, { lastMoveAt: Date.now() });
+  for (let i = 1; i <= 12; i++) socket.emit(EVENTS.PLAYER_MOVE, { x: -10, y: i * 0.5, z: 5, ry: 0, rx: 0 });
+  await new Promise((r) => setTimeout(r, 150));
+  assert.ok(p.y < 2, `reached y=${p.y.toFixed(2)}`);
+  socket.disconnect();
+});
+
+test('moving into a box is rejected', async () => {
+  const { socket, joined } = await joinPlayer('Ghost');
+  place(joined.id, 0, 2.5, { lastMoveAt: Date.now() - 100 }); // just south of the center box (z <= 2)
+  const correction = once(socket, EVENTS.POSITION_CORRECTION);
+  socket.emit(EVENTS.PLAYER_MOVE, { x: 0, y: 0, z: 1.9, ry: 0, rx: 0 });
+  const c = await correction;
+  assert.equal(c.z, 2.5);
+  socket.disconnect();
+});
+
+test('fire rate tolerance does not allow a faster sustained rate', async () => {
+  const a = await joinPlayer('Macro');
+  const b = await joinPlayer('Dummy');
+  place(a.joined.id, 10, 5);
+  place(b.joined.id, 10, -5);
+  const hits = [];
+  a.socket.on(EVENTS.PLAYER_HIT, (h) => hits.push(h));
+  for (let i = 0; i < 3; i++) {
+    fireAt(a.socket, { x: 10, z: 5 }, { x: 0, y: 0, z: -1 });
+    await new Promise((r) => setTimeout(r, 350)); // pistol is 400ms; 350 passes a per-shot 0.85 check
+  }
+  assert.equal(hits.length, 2);
+  a.socket.disconnect();
+  b.socket.disconnect();
+});
+
 test('walls block shots', async () => {
   const a = await joinPlayer('Camper');
   const b = await joinPlayer('Hider');

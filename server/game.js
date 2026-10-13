@@ -8,7 +8,14 @@ import {
 const COLLIDERS = mapColliders();
 const HISTORY_MS = 1000; // position history kept per player for lag compensation
 const MOVE_TOLERANCE = 1.5; // multiplier on max speed to absorb network jitter
-const MOVE_SLACK = 0.75; // flat extra distance allowed per update
+const MOVE_BURST = 1.5; // max horizontal distance that can be banked while idle / packets bunch up
+const MAX_FALL_SPEED = 25; // units / second; generous bound on downward speed
+const VERT_SLACK = 0.3; // flat tolerance on vertical checks
+// Highest a jump can rise above the surface it left (v^2 / 2g), plus slack.
+const MAX_CLIMB = (PLAYER.jumpVelocity ** 2) / (2 * PLAYER.gravity) + VERT_SLACK;
+const SWEEP_STEP = 0.3; // spacing of collision samples along a move, so thin walls can't be skipped
+const COLLIDE_INSET = 0.05; // shrink colliders slightly so the client's EPS pushes never count as overlap
+const GROUND_EPS = 0.1;
 const MAX_ORIGIN_DRIFT = 2.0; // how far a shot origin may be from the server's view of the shooter's eye
 const FIRE_RATE_TOLERANCE = 0.85; // accept shots slightly early to absorb jitter
 const MAX_Y = Math.max(...MAP.boxes.map((b) => b.h)) + 3;
@@ -35,6 +42,21 @@ function applySpread(dir, spread) {
   const du = Math.cos(a) * r;
   const dw = Math.sin(a) * r;
   return normalize({ x: dir.x + u.x * du + w.x * dw, y: dir.y + u.y * du + w.y * dw, z: dir.z + u.z * du + w.z * dw });
+}
+
+const overlapsXZ = (x, z, c, r) => x - r < c.max.x && x + r > c.min.x && z - r < c.max.z && z + r > c.min.z;
+
+// Would a player standing at (x, y, z) be inside any solid?
+function insideSolid(x, y, z) {
+  const r = PLAYER.radius - COLLIDE_INSET;
+  return COLLIDERS.some((c) => overlapsXZ(x, z, c, r)
+    && y < c.max.y - COLLIDE_INSET && y + PLAYER.height > c.min.y + COLLIDE_INSET);
+}
+
+// Is the player standing on the ground or on top of a box?
+function grounded(x, y, z) {
+  if (y <= GROUND_EPS) return true;
+  return COLLIDERS.some((c) => Math.abs(y - c.max.y) <= GROUND_EPS && overlapsXZ(x, z, c, PLAYER.radius));
 }
 
 function sanitizeUsername(name) {
@@ -78,7 +100,7 @@ export class Room {
   }
 
   placeAt(p, spawn, now) {
-    Object.assign(p, { x: spawn.x, y: 0, z: spawn.z, ry: Math.atan2(spawn.x, spawn.z), rx: 0, lastMoveAt: now });
+    Object.assign(p, { x: spawn.x, y: 0, z: spawn.z, ry: Math.atan2(spawn.x, spawn.z), rx: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0 });
     p.history = [{ t: now, x: p.x, y: p.y, z: p.z }];
   }
 
@@ -87,7 +109,7 @@ export class Room {
       id: socket.id, username: sanitizeUsername(username),
       x: 0, y: 0, z: 0, ry: 0, rx: 0,
       tier: 1, health: MAX_HEALTH, alive: true, kills: 0,
-      lastFireAt: 0, lastMoveAt: now, history: [], respawnTimer: null,
+      lastFireAt: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0, history: [], respawnTimer: null,
     };
     this.placeAt(p, this.pickSpawn(p.id), now);
     this.players.set(p.id, p);
@@ -118,20 +140,36 @@ export class Room {
     if (isNum(data.ry)) p.ry = data.ry;
     if (isNum(data.rx)) p.rx = clamp(data.rx, -Math.PI / 2, Math.PI / 2);
 
+    // Horizontal distance comes out of a budget that refills with elapsed time, so the allowance is
+    // per second rather than per message (sending more moves doesn't buy more distance).
     const dt = clamp((now - p.lastMoveAt) / 1000, 0, 1);
-    const maxHoriz = PLAYER.moveSpeed * dt * MOVE_TOLERANCE + MOVE_SLACK;
-    const maxVert = PLAYER.jumpVelocity * dt * 2 + MOVE_SLACK; // falling can outpace jump velocity briefly
+    p.lastMoveAt = now;
+    p.moveBudget = Math.min(p.moveBudget + PLAYER.moveSpeed * MOVE_TOLERANCE * dt, MOVE_BURST);
+
+    const y = Math.max(0, data.y);
     const horiz = Math.hypot(data.x - p.x, data.z - p.z);
     const lim = MAP.halfSize - PLAYER.radius;
     const inBounds = Math.abs(data.x) <= lim + 0.05 && Math.abs(data.z) <= lim + 0.05 && data.y >= -0.05 && data.y <= MAX_Y;
+    const fallOk = p.y - y <= MAX_FALL_SPEED * dt + VERT_SLACK;
+    const climbOk = y <= p.groundY + MAX_CLIMB; // can't rise further above the last surface stood on than a jump allows
 
-    if (horiz > maxHoriz || Math.abs(data.y - p.y) > maxVert || !inBounds) {
+    if (!inBounds || horiz > p.moveBudget || !fallOk || !climbOk || this.sweepHitsSolid(p, data.x, y, data.z, horiz)) {
       socket.emit(EVENTS.POSITION_CORRECTION, { x: p.x, y: p.y, z: p.z });
-      p.lastMoveAt = now;
       return;
     }
-    p.x = data.x; p.y = Math.max(0, data.y); p.z = data.z;
-    p.lastMoveAt = now;
+    p.moveBudget -= horiz;
+    p.x = data.x; p.y = y; p.z = data.z;
+    if (grounded(p.x, p.y, p.z)) p.groundY = p.y;
+  }
+
+  // Sample the straight path from the current position to the target for solid overlap.
+  sweepHitsSolid(p, x, y, z, dist) {
+    const steps = Math.max(1, Math.ceil(dist / SWEEP_STEP));
+    for (let i = 1; i <= steps; i++) {
+      const k = i / steps;
+      if (insideSolid(lerp(p.x, x, k), lerp(p.y, y, k), lerp(p.z, z, k))) return true;
+    }
+    return false;
   }
 
   // Where was this player at server time t? Interpolates the tick history.
@@ -161,7 +199,9 @@ export class Room {
     if (Math.hypot(o.x - eye.x, o.y - eye.y, o.z - eye.z) > MAX_ORIGIN_DRIFT) return;
     const aim = normalize(data.direction);
     if (!aim) return;
-    shooter.lastFireAt = now;
+    // Advance by a full interval (not to `now`) so early-arriving shots borrow from the next one;
+    // the tolerance absorbs jitter without raising the sustained fire rate.
+    shooter.lastFireAt = Math.max(now, shooter.lastFireAt + weapon.fireRate);
 
     // Lag compensation: rewind targets to what the shooter saw (their clock minus interpolation delay).
     const claimed = isNum(data.time) ? data.time - INTERPOLATION_DELAY_MS : now;
@@ -192,18 +232,18 @@ export class Room {
     }
 
     this.emit(EVENTS.SHOT_FIRED, { id: shooter.id, tier: shooter.tier, origin, ends });
-    for (const [target, dmg] of damageByTarget) this.applyDamage(shooter, target, Math.round(dmg), now);
+    for (const [target, dmg] of damageByTarget) this.applyDamage(shooter, target, Math.round(dmg), now, weapon);
   }
 
-  applyDamage(attacker, target, damage, now) {
+  applyDamage(attacker, target, damage, now, weapon = getWeapon(attacker.tier)) {
     if (!target.alive || !this.matchActive) return;
     target.health = Math.max(0, target.health - damage);
     this.emit(EVENTS.PLAYER_HIT, { targetId: target.id, attackerId: attacker.id, health: target.health, damage });
-    if (target.health <= 0) this.handleKill(attacker, target, now);
+    if (target.health <= 0) this.handleKill(attacker, target, now, weapon);
   }
 
-  handleKill(killer, victim, now) {
-    const weapon = getWeapon(killer.tier);
+  // weapon = what actually landed the kill (a shotgun multi-kill upgrades the killer mid-blast).
+  handleKill(killer, victim, now, weapon = getWeapon(killer.tier)) {
     victim.alive = false;
     victim.health = 0;
     killer.kills++;
