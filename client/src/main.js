@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { CONTRACT_VERSION, EVENTS, INTERPOLATION_DELAY_MS, FINAL_TIER, MAX_HEALTH, getWeapon } from '../../shared/constants.js';
+import {
+  CONTRACT_VERSION, EVENTS, INTERPOLATION_DELAY_MS, FINAL_TIER, MAX_HEALTH, PLAYER, getWeapon, rayAABB, mapColliders,
+} from '../../shared/constants.js';
 import { createNetwork, lerpAngle } from './network.js';
 import { createControls } from './controls.js';
 import { buildWorld } from './world.js';
@@ -272,6 +274,50 @@ warmUp();
 const autojoin = new URLSearchParams(window.location.search).get('autojoin');
 if (autojoin) startGame(autojoin);
 
+// ---- Cheat code ----
+// Left, Right, Up, Down, A, B, Enter toggles an aimbot for this player: each shot snaps the view to the head of the
+// visible enemy nearest the crosshair, within the weapon's range. Shots still go through the server's usual checks.
+const CHEAT_CODE = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyA', 'KeyB', 'Enter'];
+const COLLIDERS = mapColliders();
+let cheatProgress = 0;
+let aimbot = false;
+window.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  if (e.code === CHEAT_CODE[cheatProgress]) cheatProgress++;
+  else cheatProgress = e.code === CHEAT_CODE[0] ? 1 : 0;
+  if (cheatProgress < CHEAT_CODE.length) return;
+  cheatProgress = 0;
+  aimbot = !aimbot;
+  hud.toast(aimbot ? 'AIMBOT ON' : 'AIMBOT OFF');
+});
+
+// Points dir (and the view) at the head of the visible enemy closest to dir, if there is one in range.
+// Remote meshes sit where this client renders them, which is the pose the server rewinds hit detection to.
+function snapAim(eye, dir) {
+  const range = getWeapon(tier).range;
+  const players = net.latest() || {};
+  let best = null;
+  let bestCos = -Infinity;
+  for (const [id, r] of remotes) {
+    if (id === 'dummy' || !r.mesh.visible) continue;
+    const top = players[id]?.crouch ? PLAYER.crouchHeight : PLAYER.height;
+    const head = { x: r.mesh.position.x, y: r.mesh.position.y + top - 0.15, z: r.mesh.position.z };
+    const to = { x: head.x - eye.x, y: head.y - eye.y, z: head.z - eye.z };
+    const dist = Math.hypot(to.x, to.y, to.z);
+    if (dist > range || dist < 1e-3) continue;
+    to.x /= dist; to.y /= dist; to.z /= dist;
+    const cos = to.x * dir.x + to.y * dir.y + to.z * dir.z;
+    if (cos <= bestCos) continue;
+    if (COLLIDERS.some((c) => { const t = rayAABB(eye, to, c.min, c.max); return t !== null && t < dist; })) continue;
+    best = to;
+    bestCos = cos;
+  }
+  if (!best) return;
+  dir.set(best.x, best.y, best.z);
+  controls.yaw = Math.atan2(-best.x, -best.z);
+  controls.pitch = Math.asin(best.y);
+}
+
 // ---- Firing ----
 const tmpOrigin = new THREE.Vector3();
 const tmpDir = new THREE.Vector3();
@@ -283,6 +329,7 @@ function tryFire(now) {
   lastFireAt = now;
   camera.getWorldPosition(tmpOrigin);
   camera.getWorldDirection(tmpDir).normalize();
+  if (aimbot) snapAim(tmpOrigin, tmpDir);
   net.emitFire(tmpOrigin, tmpDir);
   viewmodel.fire();
   if (weapon.magSize) {

@@ -139,6 +139,7 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
     get yaw() { return yaw; },
     get pitch() { return pitch; },
     set yaw(v) { yaw = v; },
+    set pitch(v) { pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, v)); },
     get mouseDown() { return mouseDown; },
     get moving() { return moving; },
     get sprinting() { return sprinting; },
