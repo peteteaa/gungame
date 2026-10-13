@@ -4,6 +4,7 @@ import {
   INTERPOLATION_DELAY_MS, MAX_REWIND_MS, PLAYER, MAP, FINAL_TIER, getWeapon,
   rayAABB, mapColliders, playerAABB, HEADSHOT_MULTIPLIER, CONTRACT_VERSION,
 } from '../shared/constants.js';
+import { BOT_NAMES, updateBot } from './bots.js';
 
 const COLLIDERS = mapColliders();
 const HISTORY_MS = 1000; // position history kept per player for lag compensation
@@ -97,6 +98,8 @@ const DUMMY_ID = 'dummy';
 const DUMMY_KILLER = 'ggez';
 const BURN_TICK_DAMAGE = 2; // burn damage lands in whole chunks of at least this much (fewer hit events)
 const DUMMY_SPOT = MAP.dummySpot ?? MAP.spawnPoints[0];
+// AI players that join while exactly one human is in a room and leave when a second human arrives. BOTS=0 disables.
+const BOT_COUNT = Math.max(0, Math.floor(Number(process.env.BOTS ?? 3))) || 0;
 
 function newPlayer(id, username, now) {
   return {
@@ -108,17 +111,23 @@ function newPlayer(id, username, now) {
 }
 
 export class Room {
-  constructor(id, io) {
+  constructor(id, io, { bots = BOT_COUNT } = {}) {
     this.id = id;
     this.io = io;
-    this.players = new Map(); // socketId -> player
+    this.players = new Map(); // socketId (or bot/dummy id) -> player
     this.matchActive = true;
     this.restartTimer = null;
+    this.botCount = bots;
+    this.nextBotId = 1;
     if (TEST_DUMMY) this.addDummy();
   }
 
-  // Human players only; the test dummy doesn't keep a room alive or take a slot.
-  get size() { return this.players.size - (this.players.has(DUMMY_ID) ? 1 : 0); }
+  // Human players only; the test dummy and bots don't keep a room alive or take a slot.
+  get size() {
+    let n = 0;
+    for (const p of this.players.values()) if (!p.isDummy && !p.isBot) n++;
+    return n;
+  }
   emit(event, payload) { this.io.to(this.id).emit(event, payload); }
 
   serialize(p) {
@@ -164,7 +173,29 @@ export class Room {
     socket.join(this.id);
     socket.emit(EVENTS.JOINED, { id: p.id, roomId: this.id, player: this.serialize(p), players: this.serializeAll(), serverTime: now, version: CONTRACT_VERSION });
     socket.to(this.id).emit(EVENTS.PLAYER_JOINED, { player: this.serialize(p) });
+    this.syncBots(now);
     return p;
+  }
+
+  // Bots keep a lone human company and leave as soon as a second human joins (or the last one leaves).
+  syncBots(now = Date.now()) {
+    const bots = [...this.players.values()].filter((p) => p.isBot);
+    const want = this.size === 1 ? this.botCount : 0;
+    for (const b of bots.slice(want)) this.removeBot(b);
+    for (let i = bots.length; i < want; i++) this.addBot(BOT_NAMES[i % BOT_NAMES.length], now);
+  }
+
+  addBot(name, now) {
+    const p = { ...newPlayer(`bot_${this.nextBotId++}`, `BOT ${name}`, now), isBot: true, ai: { seenAt: null, lastSeenAt: 0 } };
+    this.placeAt(p, this.pickSpawn(p.id), now);
+    this.players.set(p.id, p);
+    this.emit(EVENTS.PLAYER_JOINED, { player: this.serialize(p) });
+  }
+
+  removeBot(p) {
+    clearTimeout(p.respawnTimer);
+    this.players.delete(p.id);
+    this.emit(EVENTS.PLAYER_LEFT, { id: p.id });
   }
 
   removePlayer(socket) {
@@ -174,6 +205,7 @@ export class Room {
     this.players.delete(socket.id);
     socket.leave(this.id);
     this.emit(EVENTS.PLAYER_LEFT, { id: socket.id });
+    this.syncBots();
   }
 
   destroy() {
@@ -263,16 +295,21 @@ export class Room {
 
   handleFire(socket, data, now = Date.now()) {
     const shooter = this.players.get(socket.id);
-    if (!shooter || !shooter.alive || !this.matchActive || !data || !isVec(data.origin) || !isVec(data.direction)) return;
+    if (shooter) this.fireFrom(shooter, data, now);
+  }
+
+  // A shot from any player, human or bot. Returns true if it was fired (not rejected or rate-limited).
+  fireFrom(shooter, data, now = Date.now()) {
+    if (!shooter.alive || !this.matchActive || !data || !isVec(data.origin) || !isVec(data.direction)) return false;
     const weapon = getWeapon(shooter.tier);
-    if (now - shooter.lastFireAt < weapon.fireRate * FIRE_RATE_TOLERANCE) return;
+    if (now - shooter.lastFireAt < weapon.fireRate * FIRE_RATE_TOLERANCE) return false;
 
     const eye = { x: shooter.x, y: shooter.y + (shooter.crouch ? PLAYER.crouchEyeHeight : PLAYER.eyeHeight), z: shooter.z };
     const o = data.origin;
-    if (Math.hypot(o.x - eye.x, o.y - eye.y, o.z - eye.z) > MAX_ORIGIN_DRIFT) return;
+    if (Math.hypot(o.x - eye.x, o.y - eye.y, o.z - eye.z) > MAX_ORIGIN_DRIFT) return false;
     const aim = normalize(data.direction);
-    if (!aim) return;
-    if (weapon.magSize && (this.updateReload(shooter, now, RELOAD_TOLERANCE_MS) || shooter.ammo <= 0)) return;
+    if (!aim) return false;
+    if (weapon.magSize && (this.updateReload(shooter, now, RELOAD_TOLERANCE_MS) || shooter.ammo <= 0)) return false;
     // Advance by a full interval (not to `now`) so early-arriving shots borrow from the next one;
     // the tolerance absorbs jitter without raising the sustained fire rate.
     shooter.lastFireAt = Math.max(now, shooter.lastFireAt + weapon.fireRate);
@@ -324,6 +361,7 @@ export class Room {
       this.applyDamage(shooter, target, Math.round(damage), now, weapon, headshot);
       if (weapon.burn) this.ignite(shooter, target, weapon, now);
     }
+    return true;
   }
 
   sendAmmo(p) {
@@ -451,6 +489,7 @@ export class Room {
   tick(now = Date.now()) {
     const dt = this.lastTickAt ? clamp((now - this.lastTickAt) / 1000, 0, 0.25) : 0;
     this.lastTickAt = now;
+    for (const p of this.players.values()) if (p.isBot) updateBot(this, p, now, dt);
     for (const p of this.players.values()) {
       this.updateBurn(p, now, dt);
       this.regenerate(p, now, dt);

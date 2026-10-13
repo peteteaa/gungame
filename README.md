@@ -48,6 +48,14 @@ between snapshots. The server never trusts the client for outcomes:
 
 There is intentionally no client-sent "playerKill" event — kills are only ever derived from server hit detection.
 
+## Bots
+
+When exactly one human is in a room, three AI bots (`BOT Ava`, `BOT Kai`, `BOT Milo`) join so there's someone to
+fight; they leave as soon as a second human joins. They run on the server (`server/bots.js`): they walk a grid path
+to the nearest enemy, only shoot at what they can see, react after 350–700 ms, aim with a capped turn rate and some
+wobble, and fire through the same checks as humans (`Room.fireFrom`). They climb the weapon ladder and can win a
+match. Set `BOTS` on the server to change how many join (`BOTS=0` turns them off).
+
 ## Tests
 
 ```bash
@@ -57,6 +65,7 @@ npm test
 Integration tests run real Socket.io clients against a real server on a random port
 (joining, movement correction, speed/fly/wall-clip exploits, 3-shot pistol kill + upgrade + respawn, fire-rate limit,
 wall occlusion, magazines and reloads, spoofed origins, lag compensation, knife range, match win/restart, room cleanup).
+Bot tests drive a room with simulated time (bots come and go with humans, line of sight, hunting a player down).
 
 ## Deploy
 
