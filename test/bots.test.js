@@ -13,7 +13,7 @@ const fakeIo = () => {
 const fakeSocket = (id) => ({ id, join() {}, leave() {}, emit() {}, to: () => ({ emit() {} }) });
 const botsIn = (room) => [...room.players.values()].filter((p) => p.isBot);
 
-test('bots fill in for a lone human, leave when a second human joins, and come back', () => {
+test('each human after the first replaces one bot, and bots come back as humans leave', () => {
   const io = fakeIo();
   const room = new Room('r', io, { bots: 3 });
   room.addPlayer(fakeSocket('h1'), 'Solo');
@@ -21,12 +21,19 @@ test('bots fill in for a lone human, leave when a second human joins, and come b
   assert.equal(room.size, 1, 'bots take no slots');
   assert.equal(io.events.filter((e) => e.event === EVENTS.PLAYER_JOINED).length, 3);
 
-  room.addPlayer(fakeSocket('h2'), 'Friend');
+  room.addPlayer(fakeSocket('h2'), 'Second');
+  assert.equal(botsIn(room).length, 2);
+  room.addPlayer(fakeSocket('h3'), 'Third');
+  assert.equal(botsIn(room).length, 1);
+  room.addPlayer(fakeSocket('h4'), 'Fourth');
   assert.equal(botsIn(room).length, 0);
   assert.equal(io.events.filter((e) => e.event === EVENTS.PLAYER_LEFT).length, 3);
 
+  room.removePlayer(fakeSocket('h4'));
+  room.removePlayer(fakeSocket('h3'));
+  assert.equal(botsIn(room).length, 2);
+  assert.deepEqual(botsIn(room).map((b) => b.username).sort(), ['BOT Ava', 'BOT Kai']);
   room.removePlayer(fakeSocket('h2'));
-  assert.equal(botsIn(room).length, 3);
   room.removePlayer(fakeSocket('h1'));
   assert.equal(botsIn(room).length, 0, 'an empty room keeps no bots');
   room.destroy();

@@ -98,7 +98,7 @@ const DUMMY_ID = 'dummy';
 const DUMMY_KILLER = 'ggez';
 const BURN_TICK_DAMAGE = 2; // burn damage lands in whole chunks of at least this much (fewer hit events)
 const DUMMY_SPOT = MAP.dummySpot ?? MAP.spawnPoints[0];
-// AI players that join while exactly one human is in a room and leave when a second human arrives. BOTS=0 disables.
+// AI players that fill a room with few humans: BOT_COUNT with one human, one fewer per extra human. BOTS=0 disables.
 const BOT_COUNT = Math.max(0, Math.floor(Number(process.env.BOTS ?? 3))) || 0;
 
 function newPlayer(id, username, now) {
@@ -177,10 +177,10 @@ export class Room {
     return p;
   }
 
-  // Bots keep a lone human company and leave as soon as a second human joins (or the last one leaves).
+  // Bots fill in while humans are few: botCount with one human, and each extra human replaces one bot.
   syncBots(now = Date.now()) {
     const bots = [...this.players.values()].filter((p) => p.isBot);
-    const want = this.size === 1 ? this.botCount : 0;
+    const want = this.size ? Math.max(0, this.botCount - (this.size - 1)) : 0;
     for (const b of bots.slice(want)) this.removeBot(b);
     for (let i = bots.length; i < want; i++) this.addBot(BOT_NAMES[i % BOT_NAMES.length], now);
   }

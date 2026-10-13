@@ -1,4 +1,4 @@
-// AI players that keep a lone human company. They stay on the ground and walk a grid path to the nearest
+// AI players that fill out rooms with few humans. They stay on the ground and walk a grid path to the nearest
 // enemy, shoot only at enemies they can actually see (after a reaction delay, with turn-rate-limited, wobbly
 // aim), and fire through Room.fireFrom, so fire rate, ammo, reloads and hit detection are the same as a human's.
 import { PLAYER, MAP, INTERPOLATION_DELAY_MS, getWeapon, rayAABB, mapColliders } from '../shared/constants.js';
