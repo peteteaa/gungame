@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WebGun</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="hud" class="hidden">
+    <div id="crosshair"><div id="hitmarker"></div></div>
+    <div id="damage"></div>
+    <div id="ping">-- ms</div>
+    <div id="health">
+      <div id="health-bar"><div id="health-fill"></div></div>
+      <div id="health-text">100</div>
+    </div>
+    <div id="weapon">
+      <div id="weapon-name">Pistol</div>
+      <div id="weapon-tier">Tier 1/5</div>
+    </div>
+    <div id="feed"></div>
+    <div id="toast"></div>
+    <table id="scoreboard" class="hidden">
+      <thead><tr><th>Player</th><th>Tier</th><th>Kills</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div id="death" class="overlay hidden"><h1>You died</h1><p>respawning...</p></div>
+  <div id="banner" class="overlay hidden"><h1 id="banner-title"></h1><p id="banner-sub"></p></div>
+  <div id="disconnected" class="overlay hidden"><h1>Disconnected</h1><p>reconnecting...</p></div>
+  <div id="resume" class="overlay hidden"><h1>Click to resume</h1><p>WASD move, Space jump, Mouse aim/fire, Tab scoreboard</p></div>
+
+  <div id="start" class="overlay">
+    <h1>WEBGUN</h1>
+    <p>Gun Game. Get a kill to upgrade your weapon. Win with the knife.</p>
+    <input id="username" type="text" maxlength="16" placeholder="Username" autocomplete="off" />
+    <button id="play">Play</button>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

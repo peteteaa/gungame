@@ -1,0 +1,25 @@
+{
+  "name": "webgun",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WebGun - browser Gun Game FPS (Three.js + Socket.io)",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "node --watch server/server.js & vite",
+    "dev:server": "node --watch server/server.js",
+    "dev:client": "vite",
+    "build": "vite build",
+    "start": "node server/server.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "vite": "^7.1.0"
+  }
+}

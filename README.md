@@ -64,4 +64,3 @@ Set `VITE_SERVER_URL` to the server URL in the Vercel project's environment vari
 Drop `.glb` files into `client/public/models/` using the names in `WEAPON_TIERS`
 (`pistol.glb`, `shotgun.glb`, `rifle.glb`, `sniper.glb`, `knife.glb`). Missing files fall back to
 the built-in procedural low-poly models.
-# gungame

@@ -1,0 +1,91 @@
+import { WEAPON_TIERS, FINAL_TIER, MAX_HEALTH, getWeapon } from '../../shared/constants.js';
+
+const $ = (id) => document.getElementById(id);
+const show = (el, on) => el.classList.toggle('hidden', !on);
+
+// DOM overlay: bars, kill feed, scoreboard, banners.
+export function createHud() {
+  const el = {
+    hud: $('hud'), start: $('start'), fill: $('health-fill'), hpText: $('health-text'),
+    wName: $('weapon-name'), wTier: $('weapon-tier'), feed: $('feed'), toast: $('toast'),
+    damage: $('damage'), death: $('death'), banner: $('banner'), bannerTitle: $('banner-title'),
+    bannerSub: $('banner-sub'), disc: $('disconnected'), resume: $('resume'), ping: $('ping'),
+    board: $('scoreboard'),
+  };
+  let toastTimer = 0;
+  let damageTimer = 0;
+  let bannerInterval = 0;
+
+  function pulse(node, cls, ms, timerRef) {
+    node.classList.remove(cls);
+    void node.offsetWidth; // restart transition
+    node.classList.add(cls);
+    clearTimeout(timerRef.id);
+    timerRef.id = setTimeout(() => node.classList.remove(cls), ms);
+  }
+  const toastRef = { id: 0 };
+  const damageRef = { id: 0 };
+
+  return {
+    enterGame() { show(el.start, false); show(el.hud, true); },
+    setHealth(hp) {
+      const pct = Math.max(0, Math.min(1, hp / MAX_HEALTH));
+      el.fill.style.width = `${pct * 100}%`;
+      el.fill.style.background = pct > 0.5 ? '#46d36a' : pct > 0.25 ? '#e6b83a' : '#e34a4a';
+      el.hpText.textContent = String(Math.max(0, Math.round(hp)));
+    },
+    setWeapon(tier) {
+      el.wName.textContent = getWeapon(tier).name;
+      el.wTier.textContent = `Tier ${tier}/${FINAL_TIER} — ${getWeapon(tier).name}`;
+    },
+    setPing(ms) { el.ping.textContent = `${Math.round(ms)} ms`; },
+    feed(parts) {
+      const item = document.createElement('div');
+      item.className = 'feed-item';
+      for (const p of parts) {
+        const s = document.createElement('span');
+        s.className = p.cls || '';
+        s.textContent = p.text;
+        item.append(s, ' ');
+      }
+      el.feed.append(item);
+      while (el.feed.children.length > 6) el.feed.firstChild.remove();
+      setTimeout(() => item.remove(), 5000);
+    },
+    toast(text) {
+      el.toast.textContent = text;
+      pulse(el.toast, 'on', 1800, toastRef);
+    },
+    flashDamage() { pulse(el.damage, 'on', 60, damageRef); },
+    setDead(on) { show(el.death, on); },
+    setDisconnected(on) { show(el.disc, on); },
+    setResume(on) { show(el.resume, on); },
+    showBanner(title, restartIn) {
+      clearInterval(bannerInterval);
+      el.bannerTitle.textContent = title;
+      const end = Date.now() + restartIn;
+      const tick = () => {
+        el.bannerSub.textContent = `Next match in ${Math.max(0, Math.ceil((end - Date.now()) / 1000))}s`;
+      };
+      tick();
+      bannerInterval = setInterval(tick, 250);
+      show(el.banner, true);
+    },
+    hideBanner() { clearInterval(bannerInterval); show(el.banner, false); },
+    setScoreboardVisible(on) { show(el.board, on); },
+    renderScoreboard(players, myId) {
+      const rows = Object.values(players).sort((a, b) => b.tier - a.tier || b.kills - a.kills);
+      const body = el.board.tBodies[0];
+      body.replaceChildren(...rows.map((p) => {
+        const tr = document.createElement('tr');
+        if (p.id === myId) tr.className = 'me';
+        for (const v of [p.username, `${p.tier}/${WEAPON_TIERS.length}`, p.kills]) {
+          const td = document.createElement('td');
+          td.textContent = String(v);
+          tr.append(td);
+        }
+        return tr;
+      }));
+    },
+  };
+}
