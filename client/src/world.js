@@ -5,8 +5,9 @@ function checkerTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = 64;
   const g = c.getContext('2d');
-  g.fillStyle = '#2b3140'; g.fillRect(0, 0, 64, 64);
-  g.fillStyle = '#343b4d'; g.fillRect(0, 0, 32, 32); g.fillRect(32, 32, 32, 32);
+  const [dark, light] = MAP.theme?.ground ?? ['#2b3140', '#343b4d'];
+  g.fillStyle = dark; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = light; g.fillRect(0, 0, 32, 32); g.fillRect(32, 32, 32, 32);
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.magFilter = THREE.NearestFilter;
@@ -31,10 +32,12 @@ function addBox(scene, min, max, color) {
   mesh.add(edges);
 }
 
-// Lights, fog, ground, crates and perimeter walls.
+// Lights, fog, ground, map boxes and perimeter walls (colors from the map's theme/tiles when it has them).
 export function buildWorld(scene) {
-  scene.background = new THREE.Color(0x8fb4d9);
-  scene.fog = new THREE.Fog(0x8fb4d9, 25, 95);
+  const sky = MAP.theme?.sky ?? 0x8fb4d9;
+  const [fogNear, fogFar] = MAP.theme?.fog ?? [25, 95];
+  scene.background = new THREE.Color(sky);
+  scene.fog = new THREE.Fog(sky, fogNear, fogFar);
   scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x3a3f4d, 1.1));
   const sun = new THREE.DirectionalLight(0xfff1d0, 1.6);
   sun.position.set(30, 50, 20);
@@ -50,9 +53,10 @@ export function buildWorld(scene) {
   const colliders = mapColliders();
   colliders.forEach((b, i) => {
     const isWall = i >= MAP.boxes.length;
-    const color = isWall
-      ? new THREE.Color().setHSL(0.62, 0.15, 0.3)
-      : new THREE.Color().setHSL((0.05 + i * 0.13) % 1, 0.35, 0.45 + (i % 3) * 0.05);
+    let color;
+    if (isWall) color = new THREE.Color(MAP.theme?.wall ?? new THREE.Color().setHSL(0.62, 0.15, 0.3));
+    else if (MAP.boxes[i].color !== undefined) color = new THREE.Color(MAP.boxes[i].color);
+    else color = new THREE.Color().setHSL((0.05 + i * 0.13) % 1, 0.35, 0.45 + (i % 3) * 0.05);
     addBox(scene, b.min, b.max, color);
   });
 }

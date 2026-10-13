@@ -62,6 +62,17 @@ wall occlusion, magazines and reloads, spoofed origins, lag compensation, knife 
 **Client (Vercel):** `vercel.json` builds with `npm run build` and serves `client/dist`.
 Set `VITE_SERVER_URL` to the server URL in the Vercel project's environment variables.
 
+## Maps
+
+The first map is inspired by Valorant's **Ascent**. Attackers spawn south and defenders north. A site (west) has the
+generator, a stepped Heaven platform, and the A Main / Rafters entrances. B site (east) has the Boathouse, B Main and
+B Back. The open Mid courtyard links to A via Catwalk, to B via Market, and to defender spawn via Mid Top.
+
+Maps live in `MAPS` in `shared/constants.js`. Ascent is drawn as ASCII, one character per 2x2-unit cell with north
+on the top row: `#` building, `X` big crate, `x` climbable crate, `G` generator, `a`/`b`/`c` steps up to a raised
+platform, `D`/`A`/`s` spawn points, `T` the test dummy. Edit the grid and both client and server pick it up.
+The integration tests pin the server to the old `arena` layout (`test/use-arena-map.js`), so their positions stay valid.
+
 ## Weapon models
 
 Gun models come from [Low poly guns](https://sketchfab.com/3d-models/low-poly-guns-68cbd757dacb4d0e82cf8f06fcde0a46)

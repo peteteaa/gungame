@@ -1,4 +1,5 @@
 // Integration tests: real Socket.io clients against a real server on an ephemeral port.
+import './use-arena-map.js'; // must stay the first import
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { io as connect } from 'socket.io-client';

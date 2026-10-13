@@ -93,7 +93,7 @@ function sanitizeUsername(name) {
 // upgrades like a real kill, and respawns in place. Disable with TEST_DUMMY=0.
 const TEST_DUMMY = process.env.TEST_DUMMY !== '0';
 const DUMMY_ID = 'dummy';
-const DUMMY_SPOT = { x: 0, z: 10 };
+const DUMMY_SPOT = MAP.dummySpot ?? MAP.spawnPoints[0];
 
 function newPlayer(id, username, now) {
   return {

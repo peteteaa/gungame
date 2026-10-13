@@ -44,32 +44,139 @@ export const WEAPON_TIERS = [
 export const FINAL_TIER = WEAPON_TIERS.length;
 export const getWeapon = (tier) => WEAPON_TIERS[Math.min(Math.max(tier, 1), FINAL_TIER) - 1];
 
-// Static map. Ground is y = 0. Each box is an axis-aligned solid: center (x, z), size (w, d), height h, sitting on the ground.
-export const MAP = {
-  halfSize: 30, // playable area is [-30, 30] on x and z; perimeter walls sit just outside
-  wallHeight: 4,
-  boxes: [
-    { x: 0, z: 0, w: 4, d: 4, h: 3 },
-    { x: -12, z: -12, w: 6, d: 1, h: 2.5 },
-    { x: 12, z: 12, w: 6, d: 1, h: 2.5 },
-    { x: -12, z: 12, w: 1, d: 6, h: 2.5 },
-    { x: 12, z: -12, w: 1, d: 6, h: 2.5 },
-    { x: -20, z: 0, w: 2, d: 2, h: 1.2 },
-    { x: 20, z: 0, w: 2, d: 2, h: 1.2 },
-    { x: 0, z: -20, w: 2, d: 2, h: 1.2 },
-    { x: 0, z: 20, w: 2, d: 2, h: 1.2 },
-    { x: -6, z: 8, w: 1.5, d: 1.5, h: 1 },
-    { x: 6, z: -8, w: 1.5, d: 1.5, h: 1 },
-    { x: 22, z: 22, w: 3, d: 3, h: 4 },
-    { x: -22, z: -22, w: 3, d: 3, h: 4 },
-    { x: 22, z: -22, w: 3, d: 3, h: 2 },
-    { x: -22, z: 22, w: 3, d: 3, h: 2 },
-  ],
-  spawnPoints: [
-    { x: -26, z: -26 }, { x: 26, z: 26 }, { x: -26, z: 26 }, { x: 26, z: -26 },
-    { x: 0, z: -27 }, { x: 0, z: 27 }, { x: -27, z: 0 }, { x: 27, z: 0 },
-  ],
+// ---- Maps ----
+// Ground is y = 0. Each box is an axis-aligned solid sitting on the ground: center (x, z), size (w, d), height h.
+
+// Maps can be drawn as ASCII, one character per MAP_CELL x MAP_CELL square, north (-z) on the top row.
+// Runs of the same solid tile merge into one box. Marker tiles are open ground.
+const MAP_CELL = 2;
+const TILES = {
+  '#': { h: 6, color: 0xd8c49f }, // building
+  G: { h: 2.6, color: 0x56616c }, // generator
+  X: { h: 2.2, color: 0x8a6a45 }, // big crate (too tall to climb)
+  x: { h: 1.0, color: 0xa47b4f }, // crate (climbable)
+  a: { h: 0.6, color: 0xbf7a50 }, // steps up to a raised platform
+  b: { h: 1.2, color: 0xb36a42 },
+  c: { h: 1.8, color: 0xa85d38 },
 };
+const MARKERS = { D: 'spawn', A: 'spawn', s: 'spawn', T: 'dummy' }; // defender / attacker / extra spawns, test dummy
+
+function parseMap({ rows, ...rest }) {
+  const n = rows.length;
+  const half = (n * MAP_CELL) / 2;
+  const at = (c, r) => ({ x: -half + (c + 0.5) * MAP_CELL, z: -half + (r + 0.5) * MAP_CELL });
+  const used = rows.map(() => Array(n).fill(false));
+  const boxes = [];
+  const spawnPoints = [];
+  let dummySpot = null;
+  for (let r = 0; r < n; r++) {
+    if (rows[r].length !== n) throw new Error(`map row ${r} is ${rows[r].length} wide; rows must form a square`);
+    for (let c = 0; c < n; c++) {
+      const ch = rows[r][c];
+      if (MARKERS[ch] === 'spawn') spawnPoints.push(at(c, r));
+      else if (MARKERS[ch] === 'dummy') dummySpot = at(c, r);
+      else if (ch !== '.' && !TILES[ch]) throw new Error(`unknown map tile '${ch}' at column ${c}, row ${r}`);
+      if (!TILES[ch] || used[r][c]) continue;
+      // Greedy merge: widen along the row, then grow down while the whole span still matches.
+      const free = (rr, cc) => rows[rr][cc] === ch && !used[rr][cc];
+      let c1 = c;
+      while (c1 + 1 < n && free(r, c1 + 1)) c1++;
+      let r1 = r;
+      while (r1 + 1 < n && Array.from({ length: c1 - c + 1 }, (_, k) => c + k).every((cc) => free(r1 + 1, cc))) r1++;
+      for (let rr = r; rr <= r1; rr++) for (let cc = c; cc <= c1; cc++) used[rr][cc] = true;
+      const w = (c1 - c + 1) * MAP_CELL;
+      const d = (r1 - r + 1) * MAP_CELL;
+      boxes.push({ x: -half + c * MAP_CELL + w / 2, z: -half + r * MAP_CELL + d / 2, w, d, h: TILES[ch].h, color: TILES[ch].color });
+    }
+  }
+  return { halfSize: half, boxes, spawnPoints, dummySpot, ...rest };
+}
+
+export const MAPS = {
+  // Inspired by Valorant's Ascent: attackers spawn south, defenders north. A site (west) has the generator,
+  // Heaven (stepped platform) and A Main / Rafters entrances; B site (east) has the Boathouse, B Main and B Back.
+  // The open Mid courtyard links to A via Catwalk, to B via Market, and to defender spawn via Mid Top.
+  ascent: parseMap({
+    name: 'Ascent',
+    wallHeight: 6,
+    theme: { sky: 0x9cc3e6, ground: ['#cdbd98', '#d6c7a4'], wall: 0xc4ad85, fog: [35, 120] },
+    rows: [
+    '########################################',
+    '##############............##############',
+    '#####............D....D............#####',
+    '#####..s........x......x........s..#####',
+    '#####..............D...............#####',
+    '#####....aaaa#...............###########',
+    '#........bbbb#####....####.............#',
+    '#.s......cccc#####....####.x.........s.#',
+    '#....XX..cccc#####....####.............#',
+    '#x........bbb#####....####....XX...#####',
+    '#..........aa#####......##....XX...#####',
+    '#..GG....#...#####......##.........#####',
+    '#..GG....#...#####....####..x..........#',
+    '#.....XX.........#....####.......X.....#',
+    '#.....XX.........#....####.......X.....#',
+    '#.x..........#...#....####.............#',
+    '#....#########................#####....#',
+    '#....#########.s..............#####....#',
+    '#....#########..x.............#####....#',
+    '#....#########................#####....#',
+    '#....#########.....XX.....#########....#',
+    '#..x.#########.....XX.....#########....#',
+    '#....#########............#########.x..#',
+    '#....#########.........x..#########....#',
+    '#....#########......T.....#########....#',
+    '#....#########...x......s.#########....#',
+    '#....#########............#########....#',
+    '#....############......############....#',
+    '#...........#####......#####...........#',
+    '#...........#####......#####...........#',
+    '#..s..XX....#####..x...#####....XX..s..#',
+    '#.....XX....#####......#####....XX.....#',
+    '#.........s.#####......#####.s.........#',
+    '#...........#####......#####...........#',
+    '########........................########',
+    '########...........A............########',
+    '########........x......x........########',
+    '########.......A........A.......########',
+    '#############..............#############',
+    '########################################',
+    ],
+  }),
+
+  // The original arena. Integration tests pin the server to it (WEBGUN_MAP=arena) so their positions stay valid.
+  arena: {
+    name: 'Arena',
+    halfSize: 30, // playable area is [-30, 30] on x and z; perimeter walls sit just outside
+    wallHeight: 4,
+    boxes: [
+      { x: 0, z: 0, w: 4, d: 4, h: 3 },
+      { x: -12, z: -12, w: 6, d: 1, h: 2.5 },
+      { x: 12, z: 12, w: 6, d: 1, h: 2.5 },
+      { x: -12, z: 12, w: 1, d: 6, h: 2.5 },
+      { x: 12, z: -12, w: 1, d: 6, h: 2.5 },
+      { x: -20, z: 0, w: 2, d: 2, h: 1.2 },
+      { x: 20, z: 0, w: 2, d: 2, h: 1.2 },
+      { x: 0, z: -20, w: 2, d: 2, h: 1.2 },
+      { x: 0, z: 20, w: 2, d: 2, h: 1.2 },
+      { x: -6, z: 8, w: 1.5, d: 1.5, h: 1 },
+      { x: 6, z: -8, w: 1.5, d: 1.5, h: 1 },
+      { x: 22, z: 22, w: 3, d: 3, h: 4 },
+      { x: -22, z: -22, w: 3, d: 3, h: 4 },
+      { x: 22, z: -22, w: 3, d: 3, h: 2 },
+      { x: -22, z: 22, w: 3, d: 3, h: 2 },
+    ],
+    spawnPoints: [
+      { x: -26, z: -26 }, { x: 26, z: 26 }, { x: -26, z: 26 }, { x: 26, z: -26 },
+      { x: 0, z: -27 }, { x: 0, z: 27 }, { x: -27, z: 0 }, { x: 27, z: 0 },
+    ],
+    dummySpot: { x: 0, z: 10 },
+  },
+};
+
+// Ascent is the first map. A server process can be pinned to another layout with WEBGUN_MAP (tests only:
+// browsers always build the default, so a real server must not set it).
+export const MAP = MAPS[globalThis.process?.env?.WEBGUN_MAP] ?? MAPS.ascent;
 
 // Network event names (single source of truth for both sides).
 export const EVENTS = {
@@ -117,11 +224,11 @@ export function rayAABB(origin, dir, min, max) {
 }
 
 // World-space AABBs for every static solid, including the four perimeter walls.
-export function mapColliders() {
-  const s = MAP.halfSize;
-  const h = MAP.wallHeight;
+export function mapColliders(map = MAP) {
+  const s = map.halfSize;
+  const h = map.wallHeight;
   const t = 1; // wall thickness
-  const boxes = MAP.boxes.map((b) => ({
+  const boxes = map.boxes.map((b) => ({
     min: { x: b.x - b.w / 2, y: 0, z: b.z - b.d / 2 },
     max: { x: b.x + b.w / 2, y: b.h, z: b.z + b.d / 2 },
   }));
