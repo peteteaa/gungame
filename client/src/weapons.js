@@ -115,13 +115,12 @@ function buildProceduralGun(weapon) {
 // GLB models are optional: cache the attempt per URL; failures resolve to null.
 const loader = new GLTFLoader();
 const modelCache = new Map();
-// Fetch and parse every weapon model up front; resolves to one fitted model (or null) for shader warm-up.
+// Starts fetching every weapon model; resolves to the first tier's fitted model (or null) for shader warm-up.
+// Every model shares one material setup, so one is enough, and the warm-up needn't wait for all of them.
 export function preloadModels() {
-  return Promise.all(WEAPON_TIERS.map(loadModel))
-    .then((scenes) => {
-      const i = scenes.findIndex(Boolean);
-      return i < 0 ? null : fitModel(scenes[i], WEAPON_TIERS[i]);
-    });
+  WEAPON_TIERS.forEach(loadModel);
+  const first = WEAPON_TIERS[0];
+  return loadModel(first).then((scene) => scene && fitModel(scene, first));
 }
 
 function loadModel(weapon) {

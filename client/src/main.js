@@ -245,7 +245,7 @@ async function warmUp() {
   const standIn = createRemotePlayer({ id: 'warmup', username: 'warmup' });
   standIn.setTier(FINAL_TIER); // procedural gold knife
   group.add(standIn.mesh);
-  const gun = await preloadModels(); // also caches every weapon model
+  const gun = await preloadModels(); // also starts caching every weapon model
   if (gun) group.add(gun);
   const below = { x: 0, y: -50, z: 0 };
   effects.tracer(below, { x: 0, y: -50, z: -1 });
