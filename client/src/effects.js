@@ -70,6 +70,12 @@ export function createEffects(scene) {
     }
   }
 
+  // Flames licking up off a burning player standing at `pos` (feet).
+  function burnPuff(pos) {
+    const from = { x: pos.x + (Math.random() - 0.5) * 0.5, y: pos.y + 0.3 + Math.random() * 1.3, z: pos.z + (Math.random() - 0.5) * 0.5 };
+    flame(from, { x: from.x, y: from.y + 0.5, z: from.z });
+  }
+
   function updateFlames(dt) {
     for (const f of flames) {
       if (!f.active) continue;
@@ -125,5 +131,5 @@ export function createEffects(scene) {
     if (hitTimer > 0) { hitTimer -= dt; if (hitTimer <= 0) hitEl.classList.remove('on'); }
   }
 
-  return { tracer, flame, createMuzzleFlash, hitMarker, update };
+  return { tracer, flame, burnPuff, createMuzzleFlash, hitMarker, update };
 }

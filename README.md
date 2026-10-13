@@ -23,7 +23,7 @@ Or build once and let the server host everything on one port: `npm run build && 
 
 ## Controls
 
-Click to lock the mouse · WASD move · Shift sprint · Space jump · Left click fire (hold for the rifle) · R reload · Tab scoreboard
+Click to lock the mouse · WASD move · Shift sprint · Space jump · Left click fire (hold for automatics) · Q aim down sights (scoped guns) · R reload · Tab scoreboard
 
 ## Server authority
 
@@ -42,6 +42,7 @@ between snapshots. The server never trusts the client for outcomes:
 | Lag compensation: targets rewound up to 300 ms using per-tick position history | `Room.positionAt` |
 | Damage, deaths, tier upgrades, respawns, match win/restart | `applyDamage` / `handleKill` |
 | Health regen: 20 HP/s after 4 s without damage (`HEALTH_REGEN`) | `Room.regenerate` |
+| Burning: flamethrower hits leave a burn (12 dmg/s for 2.5 s, refreshed per hit); burn kills only upgrade a killer still holding the flamethrower | `ignite` / `updateBurn` |
 
 There is intentionally no client-sent "playerKill" event — kills are only ever derived from server hit detection.
 

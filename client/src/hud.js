@@ -10,7 +10,7 @@ export function createHud() {
     wName: $('weapon-name'), wTier: $('weapon-tier'), feed: $('feed'), toast: $('toast'),
     damage: $('damage'), death: $('death'), banner: $('banner'), bannerTitle: $('banner-title'),
     bannerSub: $('banner-sub'), disc: $('disconnected'), resume: $('resume'), ping: $('ping'), ammo: $('ammo'),
-    board: $('scoreboard'),
+    board: $('scoreboard'), crosshair: $('crosshair'), scope: $('scope'), reddot: $('reddot'), burn: $('burn'),
   };
   let toastTimer = 0;
   let damageTimer = 0;
@@ -28,6 +28,13 @@ export function createHud() {
 
   return {
     enterGame() { show(el.start, false); show(el.hud, true); },
+    // 'cross' = hip crosshair, 'dot' = red-dot sight, 'scope' = full scope overlay, 'none' = mid-transition.
+    setAim(mode) {
+      el.crosshair.classList.toggle('off', mode !== 'cross');
+      show(el.reddot, mode === 'dot');
+      show(el.scope, mode === 'scope');
+    },
+    setBurning(on) { el.burn.classList.toggle('on', on); },
     setHealth(hp) {
       const pct = Math.max(0, Math.min(1, hp / MAX_HEALTH));
       el.fill.style.width = `${pct * 100}%`;

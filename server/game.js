@@ -95,6 +95,7 @@ function sanitizeUsername(name) {
 const TEST_DUMMY = process.env.TEST_DUMMY !== '0';
 const DUMMY_ID = 'dummy';
 const DUMMY_KILLER = 'ggez';
+const BURN_TICK_DAMAGE = 2; // burn damage lands in whole chunks of at least this much (fewer hit events)
 const DUMMY_SPOT = MAP.dummySpot ?? MAP.spawnPoints[0];
 
 function newPlayer(id, username, now) {
@@ -121,7 +122,7 @@ export class Room {
   emit(event, payload) { this.io.to(this.id).emit(event, payload); }
 
   serialize(p) {
-    return { id: p.id, username: p.username, x: p.x, y: p.y, z: p.z, ry: p.ry, rx: p.rx, tier: p.tier, health: Math.ceil(p.health), alive: p.alive, kills: p.kills };
+    return { id: p.id, username: p.username, x: p.x, y: p.y, z: p.z, ry: p.ry, rx: p.rx, tier: p.tier, health: Math.ceil(p.health), alive: p.alive, burning: !!p.burn, kills: p.kills };
   }
 
   serializeAll() {
@@ -144,7 +145,7 @@ export class Room {
   }
 
   placeAt(p, spawn, now) {
-    Object.assign(p, { x: spawn.x, y: 0, z: spawn.z, ry: Math.atan2(spawn.x, spawn.z), rx: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0, airStart: null });
+    Object.assign(p, { x: spawn.x, y: 0, z: spawn.z, ry: Math.atan2(spawn.x, spawn.z), rx: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0, airStart: null, burn: null });
     p.history = [{ t: now, x: p.x, y: p.y, z: p.z }];
   }
 
@@ -316,6 +317,7 @@ export class Room {
     this.emit(EVENTS.SHOT_FIRED, { id: shooter.id, tier: shooter.tier, origin, ends });
     for (const [target, { damage, headshot }] of damageByTarget) {
       this.applyDamage(shooter, target, Math.round(damage), now, weapon, headshot);
+      if (weapon.burn) this.ignite(shooter, target, weapon, now);
     }
   }
 
@@ -349,29 +351,57 @@ export class Room {
     if (p) this.startReload(p, now);
   }
 
-  applyDamage(attacker, target, damage, now, weapon = getWeapon(attacker.tier), headshot = false) {
-    if (!target.alive || !this.matchActive) return;
-    if (target.isDummy && attacker.username.toLowerCase() !== DUMMY_KILLER) return;
+  canDamage(attacker, target) {
+    if (!target.alive || !this.matchActive) return false;
+    return !(target.isDummy && attacker.username.toLowerCase() !== DUMMY_KILLER);
+  }
+
+  applyDamage(attacker, target, damage, now, weapon = getWeapon(attacker.tier), headshot = false, burn = false) {
+    if (!this.canDamage(attacker, target)) return;
     target.health = Math.max(0, target.health - damage);
     target.lastDamagedAt = now;
-    this.emit(EVENTS.PLAYER_HIT, { targetId: target.id, attackerId: attacker.id, health: Math.ceil(target.health), damage, headshot });
-    if (target.health <= 0) this.handleKill(attacker, target, now, weapon, headshot);
+    this.emit(EVENTS.PLAYER_HIT, { targetId: target.id, attackerId: attacker.id, health: Math.ceil(target.health), damage, headshot, burn });
+    if (target.health <= 0) this.handleKill(attacker, target, now, weapon, headshot, burn);
+  }
+
+  // Set (or refresh) a damage-over-time burn from `weapon` on the target.
+  ignite(attacker, target, weapon, now) {
+    if (!this.canDamage(attacker, target)) return;
+    target.burn = { attackerId: attacker.id, weapon, until: now + weapon.burn.durationMs, pending: target.burn?.pending ?? 0 };
+  }
+
+  updateBurn(p, now, dt) {
+    const b = p.burn;
+    if (!b) return;
+    const attacker = this.players.get(b.attackerId);
+    if (!p.alive || !attacker || now >= b.until) { p.burn = null; return; }
+    b.pending += b.weapon.burn.dps * dt;
+    if (b.pending < BURN_TICK_DAMAGE) return;
+    const damage = Math.floor(b.pending);
+    b.pending -= damage;
+    this.applyDamage(attacker, p, damage, now, b.weapon, false, true);
   }
 
   // weapon = what actually landed the kill (a shotgun multi-kill upgrades the killer mid-blast).
-  handleKill(killer, victim, now, weapon = getWeapon(killer.tier), headshot = false) {
+  handleKill(killer, victim, now, weapon = getWeapon(killer.tier), headshot = false, burn = false) {
     victim.alive = false;
     victim.health = 0;
+    victim.burn = null;
     killer.kills++;
     this.emit(EVENTS.PLAYER_KILLED, { victimId: victim.id, killerId: killer.id, weapon: weapon.name, headshot });
 
-    if (killer.tier >= FINAL_TIER) {
+    // A burn can outlive the killer's flamethrower (they already moved up): it still kills, but only a kill with
+    // the weapon they're holding upgrades them, so a stray burn can't skip a tier or win without the knife.
+    const upgrades = !burn || weapon.tier === killer.tier;
+    if (upgrades && killer.tier >= FINAL_TIER) {
       this.endMatch(killer);
       return;
     }
-    killer.tier++;
-    this.refillAmmo(killer);
-    this.emit(EVENTS.TIER_UPGRADE, { id: killer.id, newTier: killer.tier });
+    if (upgrades) {
+      killer.tier++;
+      this.refillAmmo(killer);
+      this.emit(EVENTS.TIER_UPGRADE, { id: killer.id, newTier: killer.tier });
+    }
     victim.respawnTimer = setTimeout(() => this.respawn(victim), RESPAWN_DELAY_MS);
   }
 
@@ -417,6 +447,7 @@ export class Room {
     const dt = this.lastTickAt ? clamp((now - this.lastTickAt) / 1000, 0, 0.25) : 0;
     this.lastTickAt = now;
     for (const p of this.players.values()) {
+      this.updateBurn(p, now, dt);
       this.regenerate(p, now, dt);
       this.updateReload(p, now);
       this.applyGravity(p, now);

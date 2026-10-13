@@ -10,6 +10,8 @@ import { createHud } from './hud.js';
 const MOVE_SEND_MS = 1000 / 30;
 const FOV = 75;
 const SPRINT_FOV = 83;
+const SCOPE_OVERLAY_ZOOM = 3; // zoom at or above this shows a full scope; below it, a red dot
+const BURN_PUFF_MS = 70;
 
 // ---- Renderer / scene ----
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -67,6 +69,7 @@ function applyOwnState(state) {
   hud.setHealth(state.health);
   hud.setWeapon(tier);
   hud.setDead(!alive);
+  hud.setBurning(!!state.burning && alive);
 }
 
 const showAmmo = () => hud.setAmmo(ammo, getWeapon(tier).magSize, reloadEndsAt > 0);
@@ -154,7 +157,7 @@ net.on(EVENTS.PLAYER_HIT, (d) => {
     hud.flashDamage();
     hud.setHealth(d.health);
   }
-  if (d.attackerId === myId) effects.hitMarker(d.headshot);
+  if (d.attackerId === myId && !d.burn) effects.hitMarker(d.headshot); // no marker spam from burn ticks
 });
 
 net.on(EVENTS.PLAYER_KILLED, (d) => {
@@ -277,15 +280,30 @@ function updateRemotes() {
     r.setTier(state.tier);
     r.setPitch(pose.rx);
     r.mesh.visible = state.alive !== false;
+    if (state.burning && r.mesh.visible && performance.now() >= (r.nextPuffAt ?? 0)) {
+      r.nextPuffAt = performance.now() + BURN_PUFF_MS;
+      effects.burnPuff(r.mesh.position);
+    }
   }
 }
 
 // ---- Loop ----
 let last = performance.now();
+let adsK = 0; // 0 = hip fire, 1 = fully aimed down sights
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.max(0, (now - last) / 1000); // first rAF timestamp can precede `last`
   last = now;
+
+  // Aim down sights: hold Q with a scoped gun (not while reloading).
+  const zoomMax = getWeapon(tier).ads ?? 0;
+  const aiming = joined && alive && zoomMax > 0 && controls.aimHeld && !reloadEndsAt && controls.isLocked();
+  adsK += ((aiming ? 1 : 0) - adsK) * Math.min(1, dt * 12);
+  const zoom = 1 + (Math.max(zoomMax, 1) - 1) * adsK;
+  controls.aiming = aiming;
+  controls.sensitivityScale = 1 / zoom;
+  const scoped = zoomMax >= SCOPE_OVERLAY_ZOOM && adsK > 0.9;
+  hud.setAim(adsK < 0.5 ? 'cross' : zoomMax < SCOPE_OVERLAY_ZOOM ? 'dot' : scoped ? 'scope' : 'none');
 
   if (joined) {
     if (reloadEndsAt && now >= reloadEndsAt) refillAmmo();
@@ -310,8 +328,8 @@ function frame(now) {
     }
   }
   const sprinting = controls.sprinting && controls.moving && alive;
-  viewmodel.update(dt, controls.moving && alive, sprinting);
-  const fov = camera.fov + ((sprinting ? SPRINT_FOV : FOV) - camera.fov) * Math.min(1, dt * 8);
+  viewmodel.update(dt, controls.moving && alive, sprinting, adsK, scoped);
+  const fov = camera.fov + ((sprinting ? SPRINT_FOV : FOV / zoom) - camera.fov) * Math.min(1, dt * 12);
   if (Math.abs(fov - camera.fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   effects.update(dt);
   renderer.render(scene, camera);

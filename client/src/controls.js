@@ -4,6 +4,7 @@ import { PLAYER, mapColliders } from '../../shared/constants.js';
 const MAX_DT = 0.05;
 const MAX_PITCH = (89 * Math.PI) / 180;
 const SENSITIVITY = 0.0022;
+const ADS_MOVE_SCALE = 0.6; // walking speed while aiming down sights
 const EPS = 1e-4;
 
 // Pointer lock, keyboard/mouse input and client-side movement prediction against the static map.
@@ -19,6 +20,8 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
   let pressed = false;
   let moving = false;
   let sprinting = false;
+  let aiming = false; // set by the game loop each frame (ADS needs weapon/reload state)
+  let sensitivityScale = 1; // lowered while zoomed
 
   const rig = new THREE.Object3D(); // yaw
   const pitchObj = new THREE.Object3D();
@@ -36,8 +39,9 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
   document.addEventListener('pointerlockchange', () => onLockChange(isLocked()));
   document.addEventListener('mousemove', (e) => {
     if (!isLocked()) return;
-    yaw -= e.movementX * SENSITIVITY;
-    pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch - e.movementY * SENSITIVITY));
+    const k = SENSITIVITY * sensitivityScale;
+    yaw -= e.movementX * k;
+    pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch - e.movementY * k));
   });
   canvas.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
@@ -95,9 +99,9 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
     f /= len; r /= len;
     const sin = Math.sin(yaw);
     const cos = Math.cos(yaw);
-    // Sprint: Shift while moving forward; firing drops you back to walking speed.
-    sprinting = enabled && f > 0 && !mouseDown && (keys.has('ShiftLeft') || keys.has('ShiftRight'));
-    const speed = sprinting ? PLAYER.sprintSpeed : PLAYER.moveSpeed;
+    // Sprint: Shift while moving forward; firing or aiming drops you back to walking speed.
+    sprinting = enabled && f > 0 && !mouseDown && !aiming && (keys.has('ShiftLeft') || keys.has('ShiftRight'));
+    const speed = sprinting ? PLAYER.sprintSpeed : PLAYER.moveSpeed * (aiming ? ADS_MOVE_SCALE : 1);
     vel.x = (-sin * f + cos * r) * speed;
     vel.z = (-cos * f - sin * r) * speed;
     moving = enabled && (f !== 0 || r !== 0) && grounded;
@@ -130,6 +134,9 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
     get mouseDown() { return mouseDown; },
     get moving() { return moving; },
     get sprinting() { return sprinting; },
+    get aimHeld() { return keys.has('KeyQ'); },
+    set aiming(v) { aiming = v; },
+    set sensitivityScale(v) { sensitivityScale = v; },
     consumePress() { const p = pressed; pressed = false; return p; },
     releaseFire() { mouseDown = false; pressed = false; },
   };

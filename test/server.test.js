@@ -162,6 +162,59 @@ test('health regenerates after a while without damage, not before', async () => 
   b.socket.disconnect();
 });
 
+test('flamethrower hits set targets burning, and the burn keeps doing damage', async () => {
+  const tier = WEAPON_TIERS.findIndex((w) => w.name === 'Flamethrower') + 1;
+  const a = await joinPlayer('Pyro');
+  const b = await joinPlayer('Tinder');
+  place(a.joined.id, 10, 5, { tier, ammo: getWeapon(tier).magSize });
+  const { p: target } = place(b.joined.id, 10, 2);
+  const hit = once(a.socket, EVENTS.PLAYER_HIT);
+  fireAt(a.socket, { x: 10, z: 5 }, { x: 0, y: 0, z: -1 });
+  const h = await hit;
+  assert.equal(h.burn, false);
+  assert.ok(target.burn, 'target should be burning');
+  const state = await once(b.socket, EVENTS.STATE_UPDATE);
+  assert.equal(state.players[b.joined.id].burning, true);
+
+  const burnHit = once(a.socket, EVENTS.PLAYER_HIT);
+  const b2 = await burnHit;
+  assert.equal(b2.burn, true);
+  assert.ok(b2.health < h.health, 'burn damage lands without further shots');
+  a.socket.disconnect();
+  b.socket.disconnect();
+});
+
+test('a burn kill credits the burner, but only upgrades them if they still hold the flamethrower', async () => {
+  const tier = WEAPON_TIERS.findIndex((w) => w.name === 'Flamethrower') + 1;
+  const flamethrower = getWeapon(tier);
+  const a = await joinPlayer('Arsonist');
+  const b = await joinPlayer('Ember');
+  const { room, p: burner } = place(a.joined.id, 10, 5, { tier });
+  const { p: victim } = place(b.joined.id, -10, 5);
+
+  room.ignite(burner, victim, flamethrower, Date.now());
+  victim.health = 1;
+  const killed = once(a.socket, EVENTS.PLAYER_KILLED);
+  const upgrade = once(a.socket, EVENTS.TIER_UPGRADE);
+  const k = await killed;
+  assert.deepEqual([k.killerId, k.victimId, k.weapon], [a.joined.id, b.joined.id, 'Flamethrower']);
+  assert.deepEqual(await upgrade, { id: a.joined.id, newTier: tier + 1 });
+
+  // Now holding the knife: a lingering burn kill must not win the match.
+  await once(b.socket, EVENTS.PLAYER_RESPAWN, 4000);
+  burner.tier = FINAL_TIER;
+  room.ignite(burner, victim, flamethrower, Date.now());
+  victim.health = 1;
+  const killed2 = once(a.socket, EVENTS.PLAYER_KILLED);
+  const noWin = silent(a.socket, EVENTS.MATCH_OVER, 400);
+  await killed2;
+  assert.ok(await noWin, 'a stray burn kill should not end the match');
+  assert.equal(burner.tier, FINAL_TIER);
+  assert.equal(room.matchActive, true);
+  a.socket.disconnect();
+  b.socket.disconnect();
+});
+
 test('fire rate is enforced server-side', async () => {
   const a = await joinPlayer('Spammer');
   const b = await joinPlayer('Victim');

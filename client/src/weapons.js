@@ -120,6 +120,7 @@ function fitModel(scene, weapon) {
 }
 
 const SWAP_MS = 120;
+const ADS_POS = new THREE.Vector3(0, -0.13, -0.34); // gun centered under the crosshair while aiming
 
 // First-person weapon attached to the camera, with bob, recoil, stab and swap animations.
 export function createViewmodel(camera, effects) {
@@ -169,7 +170,8 @@ export function createViewmodel(camera, effects) {
   function startReload(ms) { reload = { t: 0, ms }; }
   function cancelReload() { reload = null; }
 
-  function update(dt, moving, sprinting = false) {
+  // adsK: 0 = hip, 1 = aiming down sights (gun pulled to center). hidden: a full scope overlay is up.
+  function update(dt, moving, sprinting = false, adsK = 0, hidden = false) {
     kick = Math.max(0, kick - dt * 8);
     stab = Math.max(0, stab - dt * 4);
     bobT += dt * (moving ? (sprinting ? 13 : 9) : 0);
@@ -192,15 +194,17 @@ export function createViewmodel(camera, effects) {
     }
     const bobAmt = moving ? 1 : 0;
     const stabK = Math.sin(stab * Math.PI);
-    const bobScale = 1 + sprintK * 1.5;
+    const bobScale = (1 + sprintK * 1.5) * (1 - adsK * 0.85);
+    const hip = 1 - adsK;
     holder.position.set(
-      base.x + Math.cos(bobT) * 0.012 * bobAmt * bobScale - stabK * 0.1 - sprintK * 0.06,
-      base.y + Math.abs(Math.sin(bobT)) * 0.014 * bobAmt * bobScale - drop - sprintK * 0.07,
-      base.z + kick * 0.06 - stabK * 0.25,
+      (base.x + Math.cos(bobT) * 0.012 * bobAmt * bobScale - stabK * 0.1 - sprintK * 0.06) * hip + ADS_POS.x * adsK,
+      (base.y - sprintK * 0.07) * hip + ADS_POS.y * adsK + Math.abs(Math.sin(bobT)) * 0.014 * bobAmt * bobScale - drop,
+      (base.z - stabK * 0.25) * hip + ADS_POS.z * adsK + kick * 0.06 * (1 - adsK * 0.6),
     );
-    holder.rotation.x = kick * 0.12 + stabK * 0.5 - sprintK * 0.25;
-    holder.rotation.z = tilt + sprintK * 0.3;
-    holder.rotation.y = stabK * 0.4 + sprintK * 0.6;
+    holder.rotation.x = kick * 0.12 * (1 - adsK * 0.7) + stabK * 0.5 - sprintK * 0.25;
+    holder.rotation.z = (tilt + sprintK * 0.3) * hip;
+    holder.rotation.y = (stabK * 0.4 + sprintK * 0.6) * hip;
+    holder.visible = !hidden;
   }
 
   function muzzleWorld(target) {

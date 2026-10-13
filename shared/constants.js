@@ -29,21 +29,23 @@ export const PLAYER = {
 // fireRate = minimum ms between shots. damage = total damage per shot (split across pellets).
 // magSize = rounds per magazine (0 = melee, never reloads). reloadMs = time to refill the magazine.
 // headshot = damage multiplier for hits on the head (default HEADSHOT_MULTIPLIER).
+// ads = zoom while aiming down sights with Q (only guns whose model has a scope or sight). burn = damage over time
+// a hit leaves on the target, refreshed by each hit.
 // effect: 'flame' draws fire particles instead of tracers. kind picks the procedural fallback model; viewLength = first-person length in meters; model = GLB under client/public.
 const W = (name, kind, model, viewLength, color, stats) => ({ name, kind, model: `models/${model}.glb`, viewLength, color, ...stats });
 export const WEAPON_TIERS = [
   W('Pistol', 'pistol', 'guns/pistol_1', 0.28, 0x555555, { fireRate: 400, damage: 35, range: 80, pellets: 1, spread: 0, auto: false, magSize: 8, reloadMs: 1200 }),
   W('Heavy Pistol', 'pistol', 'guns/pistol_6', 0.3, 0x4a4f57, { fireRate: 550, damage: 50, range: 70, pellets: 1, spread: 0.005, auto: false, magSize: 6, reloadMs: 1400 }),
-  W('SMG', 'rifle', 'guns/smg_2', 0.5, 0x3b3f46, { fireRate: 80, damage: 18, range: 50, pellets: 1, spread: 0.03, auto: true, magSize: 25, reloadMs: 1500 }),
+  W('SMG', 'rifle', 'guns/smg_2', 0.5, 0x3b3f46, { fireRate: 80, damage: 18, range: 50, pellets: 1, spread: 0.03, auto: true, magSize: 25, reloadMs: 1500, ads: 1.4 }),
   W('Shotgun', 'shotgun', 'guns/shotgun_2', 0.6, 0x7a4a24, { fireRate: 800, damage: 90, range: 25, pellets: 6, spread: 0.08, auto: false, magSize: 4, reloadMs: 1800 }),
-  W('Machine Pistol', 'rifle', 'guns/smg_5', 0.45, 0x2f3a2f, { fireRate: 60, damage: 14, range: 35, pellets: 1, spread: 0.045, auto: true, magSize: 20, reloadMs: 1300 }),
-  W('Assault Rifle', 'rifle', 'guns/rifle_6', 0.6, 0x3d4a2f, { fireRate: 100, damage: 25, range: 100, pellets: 1, spread: 0.01, auto: true, magSize: 30, reloadMs: 1800 }),
+  W('Machine Pistol', 'rifle', 'guns/smg_5', 0.45, 0x2f3a2f, { fireRate: 60, damage: 14, range: 35, pellets: 1, spread: 0.045, auto: true, magSize: 20, reloadMs: 1300, ads: 1.3 }),
+  W('Assault Rifle', 'rifle', 'guns/rifle_6', 0.6, 0x3d4a2f, { fireRate: 100, damage: 25, range: 100, pellets: 1, spread: 0.01, auto: true, magSize: 30, reloadMs: 1800, ads: 1.6 }),
   W('Auto Shotgun', 'shotgun', 'guns/shotgun_1', 0.6, 0x5a3a20, { fireRate: 350, damage: 72, range: 18, pellets: 6, spread: 0.1, auto: true, magSize: 8, reloadMs: 2200 }),
-  W('Battle Rifle', 'rifle', 'guns/rifle_7', 0.65, 0x2e3440, { fireRate: 220, damage: 40, range: 120, pellets: 1, spread: 0.006, auto: false, magSize: 20, reloadMs: 2000 }),
-  W('LMG', 'rifle', 'guns/rifle_4', 0.65, 0x333a2a, { fireRate: 90, damage: 22, range: 100, pellets: 1, spread: 0.025, auto: true, magSize: 60, reloadMs: 3200 }),
-  W('Marksman Rifle', 'sniper', 'guns/sniper_1', 0.75, 0x283040, { fireRate: 450, damage: 60, range: 160, pellets: 1, spread: 0, auto: false, magSize: 10, reloadMs: 2200 }),
-  W('Sniper', 'sniper', 'guns/sniper_2', 0.8, 0x1f2a36, { fireRate: 1500, damage: 100, range: 200, pellets: 1, spread: 0, auto: false, magSize: 5, reloadMs: 2200 }),
-  W('Flamethrower', 'rifle', 'guns/flamethrower', 0.55, 0x8a3b12, { fireRate: 70, damage: 10, range: 9, pellets: 3, spread: 0.12, auto: true, magSize: 50, reloadMs: 2500, effect: 'flame', headshot: 1 }),
+  W('Battle Rifle', 'rifle', 'guns/rifle_7', 0.65, 0x2e3440, { fireRate: 220, damage: 40, range: 120, pellets: 1, spread: 0.006, auto: false, magSize: 20, reloadMs: 2000, ads: 2 }),
+  W('LMG', 'rifle', 'guns/rifle_4', 0.65, 0x333a2a, { fireRate: 90, damage: 22, range: 100, pellets: 1, spread: 0.025, auto: true, magSize: 60, reloadMs: 3200, ads: 1.6 }),
+  W('Marksman Rifle', 'sniper', 'guns/sniper_1', 0.75, 0x283040, { fireRate: 450, damage: 60, range: 160, pellets: 1, spread: 0, auto: false, magSize: 10, reloadMs: 2200, ads: 3.5 }),
+  W('Sniper', 'sniper', 'guns/sniper_2', 0.8, 0x1f2a36, { fireRate: 1500, damage: 100, range: 200, pellets: 1, spread: 0, auto: false, magSize: 5, reloadMs: 2200, ads: 6 }),
+  W('Flamethrower', 'rifle', 'guns/flamethrower', 0.55, 0x8a3b12, { fireRate: 70, damage: 10, range: 9, pellets: 3, spread: 0.12, auto: true, magSize: 50, reloadMs: 2500, effect: 'flame', headshot: 1, burn: { dps: 12, durationMs: 2500 }, ads: 1.25 }),
   W('Combat Knife', 'knife', 'knife', 0.35, 0xd4af37, { fireRate: 300, damage: 100, range: 2.5, pellets: 1, spread: 0, auto: false, magSize: 0, reloadMs: 0 }), // winning tier
 ].map((w, i) => ({ tier: i + 1, ...w }));
 export const FINAL_TIER = WEAPON_TIERS.length;
@@ -194,10 +196,10 @@ export const EVENTS = {
   RELOAD: 'reload', // (no payload) start reloading the current weapon
   // server -> client
   JOINED: 'joined', // { id, roomId, player, players, serverTime }
-  STATE_UPDATE: 'stateUpdate', // { players: { [id]: {id, username, x,y,z, ry, rx, tier, health, alive, kills} }, serverTime }
+  STATE_UPDATE: 'stateUpdate', // { players: { [id]: {id, username, x,y,z, ry, rx, tier, health, alive, kills, burning} }, serverTime }
   TIER_UPGRADE: 'tierUpgrade', // { id, newTier }
   SHOT_FIRED: 'shotFired', // { id, tier, origin, ends: [{x,y,z}] }  for tracers
-  PLAYER_HIT: 'playerHit', // { targetId, attackerId, health, damage, headshot }
+  PLAYER_HIT: 'playerHit', // { targetId, attackerId, health, damage, headshot, burn }  burn = a damage-over-time tick
   PLAYER_KILLED: 'playerKilled', // { victimId, killerId, weapon, headshot }
   PLAYER_RESPAWN: 'playerRespawn', // { id, x, y, z }
   POSITION_CORRECTION: 'positionCorrection', // { x, y, z }  server rejected a move; snap here
