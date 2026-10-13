@@ -435,7 +435,7 @@ export function createRemotePlayer(state) {
   let crouchK = 0; // 0 = standing, 1 = crouched (kneel: one leg forward, one back, body lowered)
   function animate(dt, crouched = false) {
     if (dt <= 0) return;
-    if (hurtTimer > 0 && (hurtTimer -= dt * 1000) <= 0) { faceMat.map = face.normal; faceMat.needsUpdate = true; }
+    if (hurtTimer > 0 && (hurtTimer -= dt * 1000) <= 0) faceMat.map = face.normal;
     crouchK += ((crouched ? 1 : 0) - crouchK) * Math.min(1, dt * 12);
     const speed = havePos ? Math.hypot(root.position.x - lastPos.x, root.position.z - lastPos.z) / dt : 0;
     lastPos.copy(root.position);
@@ -467,10 +467,10 @@ export function createRemotePlayer(state) {
     },
     setPitch(rx) { head.rotation.x = rx; },
     // Pained expression for a moment after being hit.
+    // Swapping one map for another needs no needsUpdate (that would re-resolve the shader on every hit).
     hurt() {
       hurtTimer = HURT_MS;
       faceMat.map = face.hurt;
-      faceMat.needsUpdate = true;
     },
     dispose() {
       disposed = true;
