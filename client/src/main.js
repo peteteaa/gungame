@@ -107,9 +107,9 @@ function resetRemotes() {
 function removeRemote(id) {
   const r = remotes.get(id);
   if (!r) return;
+  remotes.delete(id); // first, so a failed dispose can't leave it to be retried (and throw) every frame
   scene.remove(r.mesh);
   r.dispose();
-  remotes.delete(id);
 }
 
 // ---- Network events ----

@@ -401,7 +401,8 @@ export function createRemotePlayer(state) {
   const disposeTree = (obj) => obj.traverse((o) => {
     if (o.userData.shared) return; // gun models share GPU resources with the load cache
     if (o.geometry) o.geometry.dispose();
-    if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+    // The head has one material per face; an array's .map is Array.prototype.map, not a texture.
+    for (const m of [o.material ?? []].flat()) { m.map?.dispose(); m.dispose(); }
   });
 
   function setGun(group) {
