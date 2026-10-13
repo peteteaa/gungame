@@ -215,6 +215,30 @@ test('a burn kill credits the burner, but only upgrades them if they still hold 
   b.socket.disconnect();
 });
 
+test('crouching shrinks the hitbox and lowers the head', async () => {
+  const a = await joinPlayer('Spotter');
+  const b = await joinPlayer('Ducker');
+  place(a.joined.id, 10, 5);
+  const { p: target } = place(b.joined.id, 10, -5);
+
+  const standingHit = once(a.socket, EVENTS.PLAYER_HIT);
+  fireAt(a.socket, { x: 10, z: 5 }, { x: 0, y: 0, z: -1 }, 1.4); // chest height on a standing player
+  assert.equal((await standingHit).headshot, false);
+
+  place(a.joined.id, 10, 5);
+  target.crouch = true;
+  const miss = silent(a.socket, EVENTS.PLAYER_HIT);
+  fireAt(a.socket, { x: 10, z: 5 }, { x: 0, y: 0, z: -1 }, 1.4); // now passes over their head
+  assert.ok(await miss, 'shot should clear a crouched player');
+
+  place(a.joined.id, 10, 5);
+  const head = once(a.socket, EVENTS.PLAYER_HIT);
+  fireAt(a.socket, { x: 10, z: 5 }, { x: 0, y: 0, z: -1 }, 1.0); // a crouched player's head
+  assert.equal((await head).headshot, true);
+  a.socket.disconnect();
+  b.socket.disconnect();
+});
+
 test('fire rate is enforced server-side', async () => {
   const a = await joinPlayer('Spammer');
   const b = await joinPlayer('Victim');
@@ -284,6 +308,20 @@ test('sprinting at full sprint speed is accepted', async () => {
   for (let t = SEND_MS / 1000; t <= 1; t += SEND_MS / 1000) points.push({ x: -10 + PLAYER.sprintSpeed * t, y: 0, z: 5 });
   assert.deepEqual(await sendPath(socket, points), []);
   assert.ok(p.x > -10 + PLAYER.sprintSpeed * 0.9);
+  socket.disconnect();
+});
+
+test('claiming to crouch caps your speed at crouch speed', async () => {
+  const { socket, joined } = await joinPlayer('Croucher');
+  place(joined.id, -10, 5, { lastMoveAt: Date.now() });
+  const path = (speed) => {
+    const pts = [];
+    for (let t = SEND_MS / 1000; t <= 0.6; t += SEND_MS / 1000) pts.push({ x: -10 + speed * t, y: 0, z: 5, crouch: true });
+    return pts;
+  };
+  assert.deepEqual(await sendPath(socket, path(PLAYER.crouchSpeed)), [], 'crouch-walking is fine');
+  place(joined.id, -10, 5, { lastMoveAt: Date.now(), moveBudget: 0 });
+  assert.ok((await sendPath(socket, path(PLAYER.moveSpeed))).length > 0, 'walking speed while crouched is corrected');
   socket.disconnect();
 });
 

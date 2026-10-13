@@ -5,6 +5,8 @@ const MAX_DT = 0.05;
 const MAX_PITCH = (89 * Math.PI) / 180;
 const SENSITIVITY = 0.0022;
 const ADS_MOVE_SCALE = 0.6; // walking speed while aiming down sights
+// Ctrl crouches; C too, because Ctrl+W closes the tab on Windows/Linux and pages can't block it.
+const CROUCH_KEYS = ['ControlLeft', 'ControlRight', 'KeyC'];
 const EPS = 1e-4;
 
 // Pointer lock, keyboard/mouse input and client-side movement prediction against the static map.
@@ -20,6 +22,8 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
   let pressed = false;
   let moving = false;
   let sprinting = false;
+  let crouching = false;
+  let eyeHeight = PLAYER.eyeHeight; // eases toward the crouched/standing eye height
   let aiming = false; // set by the game loop each frame (ADS needs weapon/reload state)
   let sensitivityScale = 1; // lowered while zoomed
 
@@ -52,7 +56,7 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
   window.addEventListener('mouseup', (e) => { if (e.button === 0) mouseDown = false; });
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Tab') { e.preventDefault(); onScoreboard(true); return; }
-    if (e.code === 'Space') e.preventDefault();
+    if (e.code === 'Space' || (e.ctrlKey && isLocked())) e.preventDefault(); // blocks what it can (not Ctrl+W)
     if (e.code === 'KeyR' && !e.repeat && isLocked()) onReload();
     keys.add(e.code);
   });
@@ -100,8 +104,12 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
     const sin = Math.sin(yaw);
     const cos = Math.cos(yaw);
     // Sprint: Shift while moving forward; firing or aiming drops you back to walking speed.
-    sprinting = enabled && f > 0 && !mouseDown && !aiming && (keys.has('ShiftLeft') || keys.has('ShiftRight'));
-    const speed = sprinting ? PLAYER.sprintSpeed : PLAYER.moveSpeed * (aiming ? ADS_MOVE_SCALE : 1);
+    crouching = enabled && CROUCH_KEYS.some((k) => keys.has(k));
+    sprinting = enabled && f > 0 && !mouseDown && !aiming && !crouching && (keys.has('ShiftLeft') || keys.has('ShiftRight'));
+    const speed = sprinting ? PLAYER.sprintSpeed
+      : crouching ? PLAYER.crouchSpeed
+      : PLAYER.moveSpeed * (aiming ? ADS_MOVE_SCALE : 1);
+    eyeHeight += ((crouching ? PLAYER.crouchEyeHeight : PLAYER.eyeHeight) - eyeHeight) * Math.min(1, dt * 14);
     vel.x = (-sin * f + cos * r) * speed;
     vel.z = (-cos * f - sin * r) * speed;
     moving = enabled && (f !== 0 || r !== 0) && grounded;
@@ -115,7 +123,7 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
   }
 
   function syncRig() {
-    rig.position.set(pos.x, pos.y + PLAYER.eyeHeight, pos.z);
+    rig.position.set(pos.x, pos.y + eyeHeight, pos.z);
     rig.rotation.y = yaw;
     pitchObj.rotation.x = pitch;
   }
@@ -134,6 +142,7 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
     get mouseDown() { return mouseDown; },
     get moving() { return moving; },
     get sprinting() { return sprinting; },
+    get crouching() { return crouching; },
     get aimHeld() { return keys.has('KeyQ'); },
     set aiming(v) { aiming = v; },
     set sensitivityScale(v) { sensitivityScale = v; },

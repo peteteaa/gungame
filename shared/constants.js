@@ -19,6 +19,10 @@ export const PLAYER = {
   height: 1.8, // feet to top of head
   eyeHeight: 1.6, // feet to camera
   headY: 1.5, // feet to the bottom of the head; hits from here up to `height` are headshots
+  crouchHeight: 1.2, // hitbox height while crouched (Ctrl / C)
+  crouchEyeHeight: 1.0,
+  crouchHeadY: 0.9,
+  crouchSpeed: 4, // claiming to crouch caps your speed here, so faking it for the smaller hitbox costs mobility
   moveSpeed: 8, // units / second
   sprintSpeed: 12, // holding Shift while moving forward (not while firing)
   jumpVelocity: 7,
@@ -190,13 +194,13 @@ export const MAP = MAPS[globalThis.process?.env?.WEBGUN_MAP] ?? MAPS.ascent;
 export const EVENTS = {
   // client -> server
   JOIN_MATCH: 'joinMatch', // { username }
-  PLAYER_MOVE: 'playerMove', // { x, y, z, ry, rx }
+  PLAYER_MOVE: 'playerMove', // { x, y, z, ry, rx, crouch }
   FIRE_BULLET: 'fireBullet', // { origin: {x,y,z}, direction: {x,y,z}, time }  time = client's estimate of server clock
   PING: 'clientPing', // (clientTime, ack) -> ack(serverTime)
   RELOAD: 'reload', // (no payload) start reloading the current weapon
   // server -> client
   JOINED: 'joined', // { id, roomId, player, players, serverTime }
-  STATE_UPDATE: 'stateUpdate', // { players: { [id]: {id, username, x,y,z, ry, rx, tier, health, alive, kills, burning} }, serverTime }
+  STATE_UPDATE: 'stateUpdate', // { players: { [id]: {id, username, x,y,z, ry, rx, tier, health, alive, kills, burning, crouch} }, serverTime }
   TIER_UPGRADE: 'tierUpgrade', // { id, newTier }
   SHOT_FIRED: 'shotFired', // { id, tier, origin, ends: [{x,y,z}] }  for tracers
   PLAYER_HIT: 'playerHit', // { targetId, attackerId, health, damage, headshot, burn }  burn = a damage-over-time tick
@@ -249,11 +253,11 @@ export function mapColliders(map = MAP) {
   return boxes;
 }
 
-// Player hitbox: square footprint centered on (x, z), feet at y.
+// Player hitbox: square footprint centered on (x, z), feet at y; shorter while p.crouch.
 export function playerAABB(p) {
   return {
     min: { x: p.x - PLAYER.radius, y: p.y, z: p.z - PLAYER.radius },
-    max: { x: p.x + PLAYER.radius, y: p.y + PLAYER.height, z: p.z + PLAYER.radius },
+    max: { x: p.x + PLAYER.radius, y: p.y + (p.crouch ? PLAYER.crouchHeight : PLAYER.height), z: p.z + PLAYER.radius },
   };
 }
 

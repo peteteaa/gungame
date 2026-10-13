@@ -278,6 +278,8 @@ function labelSprite(text) {
 
 const STRIDE_RAD_PER_UNIT = 2.4; // leg phase advanced per unit walked (one full cycle ~ two steps)
 const MAX_LEG_SWING = 0.8; // radians at full sprint
+const CROUCH_DROP = PLAYER.height - PLAYER.crouchHeight; // how far the body lowers when crouched
+const CROUCH_LEG_ANGLE = Math.acos((0.8 - CROUCH_DROP) / 0.8); // legs angle out so the hips sit lower
 const GUN_MOUNT = new THREE.Vector3(0.26, 1.16, -0.32); // trigger hand, chest height in front of the body
 
 // Humanoid built from boxes; origin at the feet, facing -Z at ry = 0. Legs swing with ground speed
@@ -306,7 +308,8 @@ export function createRemotePlayer(state) {
   upper.add(held);
   let gun = null;
   let arms = null;
-  root.add(labelSprite(state.username || 'player'));
+  const label = labelSprite(state.username || 'player');
+  root.add(label);
   let tier = 0;
   let disposed = false;
 
@@ -343,18 +346,23 @@ export function createRemotePlayer(state) {
   let havePos = false;
   let phase = 0;
   let stride = 0; // 0 = standing, 1 = full sprint
-  function animate(dt) {
+  let crouchK = 0; // 0 = standing, 1 = crouched (kneel: one leg forward, one back, body lowered)
+  function animate(dt, crouched = false) {
     if (dt <= 0) return;
+    crouchK += ((crouched ? 1 : 0) - crouchK) * Math.min(1, dt * 12);
     const speed = havePos ? Math.hypot(root.position.x - lastPos.x, root.position.z - lastPos.z) / dt : 0;
     lastPos.copy(root.position);
     havePos = true;
     const walking = speed > 0.5 && speed < PLAYER.sprintSpeed * 3; // ignore teleports (respawns)
     stride += ((walking ? Math.min(1, speed / PLAYER.sprintSpeed) : 0) - stride) * Math.min(1, dt * 10);
     if (walking) phase += speed * dt * STRIDE_RAD_PER_UNIT;
-    const swing = Math.sin(phase) * MAX_LEG_SWING * stride;
-    legs[0].rotation.x = swing;
-    legs[1].rotation.x = -swing;
-    upper.position.y = Math.abs(Math.cos(phase)) * 0.05 * stride;
+    const swing = Math.sin(phase) * MAX_LEG_SWING * stride * (1 - crouchK * 0.5);
+    const kneel = CROUCH_LEG_ANGLE * crouchK;
+    legs[0].rotation.x = swing + kneel;
+    legs[1].rotation.x = -swing - kneel;
+    for (const hip of legs) hip.position.y = 0.8 - CROUCH_DROP * crouchK;
+    upper.position.y = Math.abs(Math.cos(phase)) * 0.05 * stride - CROUCH_DROP * crouchK;
+    label.position.y = PLAYER.height + 0.4 - CROUCH_DROP * crouchK;
   }
 
   return {

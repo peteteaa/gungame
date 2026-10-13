@@ -279,7 +279,7 @@ function updateRemotes(dt) {
     }
     r.setTier(state.tier);
     r.setPitch(pose.rx);
-    r.animate(dt);
+    r.animate(dt, !!state.crouch);
     r.mesh.visible = state.alive !== false;
     if (state.burning && r.mesh.visible && performance.now() >= (r.nextPuffAt ?? 0)) {
       r.nextPuffAt = performance.now() + BURN_PUFF_MS;
@@ -316,7 +316,7 @@ function frame(now) {
       if (now - lastMoveSent >= MOVE_SEND_MS) {
         lastMoveSent = now;
         const p = controls.pos;
-        net.emitMove({ x: p.x, y: p.y, z: p.z, ry: controls.yaw, rx: controls.pitch });
+        net.emitMove({ x: p.x, y: p.y, z: p.z, ry: controls.yaw, rx: controls.pitch, crouch: controls.crouching });
       }
     } else {
       controls.consumePress();

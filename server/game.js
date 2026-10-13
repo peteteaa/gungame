@@ -122,7 +122,7 @@ export class Room {
   emit(event, payload) { this.io.to(this.id).emit(event, payload); }
 
   serialize(p) {
-    return { id: p.id, username: p.username, x: p.x, y: p.y, z: p.z, ry: p.ry, rx: p.rx, tier: p.tier, health: Math.ceil(p.health), alive: p.alive, burning: !!p.burn, kills: p.kills };
+    return { id: p.id, username: p.username, x: p.x, y: p.y, z: p.z, ry: p.ry, rx: p.rx, tier: p.tier, health: Math.ceil(p.health), alive: p.alive, burning: !!p.burn, crouch: !!p.crouch, kills: p.kills };
   }
 
   serializeAll() {
@@ -145,8 +145,8 @@ export class Room {
   }
 
   placeAt(p, spawn, now) {
-    Object.assign(p, { x: spawn.x, y: 0, z: spawn.z, ry: Math.atan2(spawn.x, spawn.z), rx: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0, airStart: null, burn: null });
-    p.history = [{ t: now, x: p.x, y: p.y, z: p.z }];
+    Object.assign(p, { x: spawn.x, y: 0, z: spawn.z, ry: Math.atan2(spawn.x, spawn.z), rx: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0, airStart: null, burn: null, crouch: false });
+    p.history = [{ t: now, x: p.x, y: p.y, z: p.z, crouch: false }];
   }
 
   spawnFor(p) { return p.isDummy ? DUMMY_SPOT : this.pickSpawn(p.id); }
@@ -187,13 +187,15 @@ export class Room {
     if (!p || !p.alive || !data || !isNum(data.x) || !isNum(data.y) || !isNum(data.z)) return;
     if (isNum(data.ry)) p.ry = data.ry;
     if (isNum(data.rx)) p.rx = clamp(data.rx, -Math.PI / 2, Math.PI / 2);
+    p.crouch = data.crouch === true;
 
     // Horizontal distance comes out of a budget that refills with elapsed time, so the allowance is
     // per second rather than per message (sending more moves doesn't buy more distance).
     const prevMoveAt = p.lastMoveAt;
     const dt = clamp((now - prevMoveAt) / 1000, 0, 1);
     p.lastMoveAt = now;
-    p.moveBudget = Math.min(p.moveBudget + PLAYER.sprintSpeed * MOVE_TOLERANCE * dt, MOVE_BURST); // sprint is the top speed
+    const topSpeed = p.crouch ? PLAYER.crouchSpeed : PLAYER.sprintSpeed; // crouched players are held to crouch speed
+    p.moveBudget = Math.min(p.moveBudget + topSpeed * MOVE_TOLERANCE * dt, MOVE_BURST);
 
     const y = Math.max(0, data.y);
     const horiz = Math.hypot(data.x - p.x, data.z - p.z);
@@ -243,17 +245,17 @@ export class Room {
     return false;
   }
 
-  // Where was this player at server time t? Interpolates the tick history.
+  // Where was this player (and were they crouched) at server time t? Interpolates the tick history.
   positionAt(p, t) {
     const h = p.history;
-    if (!h.length || t >= h[h.length - 1].t) return { x: p.x, y: p.y, z: p.z };
+    if (!h.length || t >= h[h.length - 1].t) return { x: p.x, y: p.y, z: p.z, crouch: p.crouch };
     if (t <= h[0].t) return h[0];
     for (let i = h.length - 1; i > 0; i--) {
       const a = h[i - 1];
       const b = h[i];
       if (t >= a.t) {
         const k = (t - a.t) / (b.t - a.t || 1);
-        return { x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), z: lerp(a.z, b.z, k) };
+        return { x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), z: lerp(a.z, b.z, k), crouch: k < 0.5 ? a.crouch : b.crouch };
       }
     }
     return h[0];
@@ -265,7 +267,7 @@ export class Room {
     const weapon = getWeapon(shooter.tier);
     if (now - shooter.lastFireAt < weapon.fireRate * FIRE_RATE_TOLERANCE) return;
 
-    const eye = { x: shooter.x, y: shooter.y + PLAYER.eyeHeight, z: shooter.z };
+    const eye = { x: shooter.x, y: shooter.y + (shooter.crouch ? PLAYER.crouchEyeHeight : PLAYER.eyeHeight), z: shooter.z };
     const o = data.origin;
     if (Math.hypot(o.x - eye.x, o.y - eye.y, o.z - eye.z) > MAX_ORIGIN_DRIFT) return;
     const aim = normalize(data.direction);
@@ -282,7 +284,10 @@ export class Room {
     const shotTime = clamp(claimed, now - MAX_REWIND_MS, now);
     const targets = [...this.players.values()]
       .filter((p) => p.alive && p.id !== shooter.id)
-      .map((p) => ({ p, box: playerAABB(this.positionAt(p, shotTime)) }));
+      .map((p) => {
+        const pos = this.positionAt(p, shotTime);
+        return { p, box: playerAABB(pos), headY: pos.crouch ? PLAYER.crouchHeadY : PLAYER.headY };
+      });
 
     const origin = { x: o.x, y: o.y, z: o.z };
     const headshotMultiplier = weapon.headshot ?? HEADSHOT_MULTIPLIER;
@@ -304,7 +309,7 @@ export class Room {
       }
       if (hit) {
         // Headshot if the ray meets the (rewound) hitbox at head height.
-        const head = origin.y + dir.y * maxT >= hit.box.min.y + PLAYER.headY;
+        const head = origin.y + dir.y * maxT >= hit.box.min.y + hit.headY;
         const prev = damageByTarget.get(hit.p) ?? { damage: 0, headshot: false };
         damageByTarget.set(hit.p, {
           damage: prev.damage + (weapon.damage / weapon.pellets) * (head ? headshotMultiplier : 1),
@@ -451,7 +456,7 @@ export class Room {
       this.regenerate(p, now, dt);
       this.updateReload(p, now);
       this.applyGravity(p, now);
-      p.history.push({ t: now, x: p.x, y: p.y, z: p.z });
+      p.history.push({ t: now, x: p.x, y: p.y, z: p.z, crouch: p.crouch });
       while (p.history.length > 1 && now - p.history[0].t > HISTORY_MS) p.history.shift();
     }
     this.emit(EVENTS.STATE_UPDATE, { players: this.serializeAll(), serverTime: now });

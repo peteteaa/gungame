@@ -23,7 +23,7 @@ Or build once and let the server host everything on one port: `npm run build && 
 
 ## Controls
 
-Click to lock the mouse · WASD move · Shift sprint · Space jump · Left click fire (hold for automatics) · Q aim down sights (scoped guns) · R reload · Tab scoreboard
+Click to lock the mouse · WASD move · Shift sprint · Ctrl or C crouch · Space jump · Left click fire (hold for automatics) · Q aim down sights (scoped guns) · R reload · Tab scoreboard
 
 ## Server authority
 
@@ -35,7 +35,8 @@ between snapshots. The server never trusts the client for outcomes:
 | Movement: time-based speed budget (spamming moves buys no extra distance), map bounds, no clipping into boxes, no climbing higher than a jump — violations get a `positionCorrection` | `Room.handleMove` |
 | Fire rate per weapon (jitter tolerance can't raise the sustained rate) | `Room.handleFire` |
 | Ammo and reloads: magazine counts and reload timers live on the server; empty or reloading guns can't fire; a kill upgrade or respawn refills | `startReload` / `updateReload` |
-| Shot origin must be within 2 units of the shooter's server-side eye position | `Room.handleFire` |
+| Shot origin must be within 2 units of the shooter's server-side eye position (crouched or standing) | `Room.handleFire` |
+| Crouch: shorter hitbox and lower head zone, kept in the lag-compensation history; claiming to crouch caps speed at crouch speed | `handleMove` / `positionAt` |
 | Hit detection: ray vs. player hitboxes, occluded by map geometry, limited by weapon range | `Room.handleFire` |
 | Headshots (2× damage, per-weapon `headshot` override): decided from where the ray meets the rewound hitbox, not claimed by the client | `Room.handleFire` |
 | Shotgun spread is rolled server-side (clients can't send perfectly tight pellets) | `applySpread` |
