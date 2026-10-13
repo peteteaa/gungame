@@ -248,3 +248,12 @@ export function playerAABB(p) {
     max: { x: p.x + PLAYER.radius, y: p.y + PLAYER.height, z: p.z + PLAYER.radius },
   };
 }
+
+// Fingerprint of everything client and server must agree on. The server sends it on join; a browser tab still
+// running an older build (e.g. it auto-reconnected after a server restart) reloads instead of playing a stale map.
+export const CONTRACT_VERSION = (() => {
+  const text = JSON.stringify({ MAP, WEAPON_TIERS, PLAYER, EVENTS, TICK_RATE });
+  let h = 0x811c9dc5; // FNV-1a
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
+  return h.toString(36);
+})();

@@ -2,7 +2,7 @@
 import {
   EVENTS, MAX_PLAYERS_PER_ROOM, MAX_HEALTH, RESPAWN_DELAY_MS, MATCH_RESTART_DELAY_MS,
   INTERPOLATION_DELAY_MS, MAX_REWIND_MS, PLAYER, MAP, FINAL_TIER, getWeapon,
-  rayAABB, mapColliders, playerAABB,
+  rayAABB, mapColliders, playerAABB, CONTRACT_VERSION,
 } from '../shared/constants.js';
 
 const COLLIDERS = mapColliders();
@@ -159,7 +159,7 @@ export class Room {
     this.placeAt(p, this.pickSpawn(p.id), now);
     this.players.set(p.id, p);
     socket.join(this.id);
-    socket.emit(EVENTS.JOINED, { id: p.id, roomId: this.id, player: this.serialize(p), players: this.serializeAll(), serverTime: now });
+    socket.emit(EVENTS.JOINED, { id: p.id, roomId: this.id, player: this.serialize(p), players: this.serializeAll(), serverTime: now, version: CONTRACT_VERSION });
     socket.to(this.id).emit(EVENTS.PLAYER_JOINED, { player: this.serialize(p) });
     return p;
   }

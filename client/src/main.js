@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { EVENTS, INTERPOLATION_DELAY_MS, FINAL_TIER, MAX_HEALTH, getWeapon } from '../../shared/constants.js';
+import { CONTRACT_VERSION, EVENTS, INTERPOLATION_DELAY_MS, FINAL_TIER, MAX_HEALTH, getWeapon } from '../../shared/constants.js';
 import { createNetwork, lerpAngle } from './network.js';
 import { createControls } from './controls.js';
 import { buildWorld } from './world.js';
@@ -108,6 +108,15 @@ net.on('disconnect', () => hud.setDisconnected(true));
 net.on('connect', () => hud.setDisconnected(false));
 
 net.on(EVENTS.JOINED, (data) => {
+  // The server runs a different build (map, weapons...): reload to fetch it, at most once per server version.
+  if (data.version !== CONTRACT_VERSION) {
+    if (sessionStorage.getItem('webgun-reloaded-for') !== data.version) {
+      sessionStorage.setItem('webgun-reloaded-for', data.version);
+      window.location.reload();
+      return;
+    }
+    console.warn(`client build ${CONTRACT_VERSION} differs from server ${data.version}`);
+  }
   myId = data.id;
   joined = true;
   net.syncClock(data.serverTime);
