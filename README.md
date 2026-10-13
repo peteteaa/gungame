@@ -24,7 +24,7 @@ Or build once and let the server host everything on one port: `npm run build && 
 
 ## Controls
 
-Click to lock the mouse · WASD move · Shift sprint · Ctrl or C crouch · Space jump · Left click fire (hold for automatics) · Q aim down sights (scoped guns) · R reload · Tab scoreboard · T chat
+Click to lock the mouse · WASD move · Shift sprint · Ctrl or C crouch · Space jump · Left click fire (hold for automatics) · Q aim down sights (scoped guns) · R reload · Tab scoreboard · T or / chat
 
 Chat goes to everyone in your room (Enter sends, Esc cancels; up to 120 characters, rate-limited on the server).
 

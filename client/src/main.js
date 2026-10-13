@@ -239,10 +239,11 @@ nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') startGame(
 document.getElementById('resume').addEventListener('click', () => controls.requestLock());
 
 // ---- Chat ----
-// T opens the chat box (the mouse stays locked, so you can keep looking around); Enter sends, Esc cancels.
+// T or / opens the chat box (the mouse stays locked, so you can keep looking around); Enter sends, Esc cancels.
+const CHAT_KEYS = new Set(['KeyT', 'Slash']);
 window.addEventListener('keydown', (e) => {
-  if (e.code !== 'KeyT' || !joined || hud.chatOpen || e.target instanceof HTMLInputElement) return;
-  e.preventDefault(); // or the T lands in the box
+  if (!CHAT_KEYS.has(e.code) || !joined || hud.chatOpen || e.target instanceof HTMLInputElement) return;
+  e.preventDefault(); // or the key lands in the box (and / is Firefox's quick find)
   hud.openChat();
 });
 hud.chatInput.addEventListener('keydown', (e) => {
