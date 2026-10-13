@@ -9,6 +9,7 @@ export const BOT_NAMES = ['Ava', 'Kai', 'Milo', 'Nova', 'Rex', 'Zed', 'Ivy'];
 const TAUNTS = [
   'gg {victim}, I was aiming at the wall',
   '{victim} I am literally a for loop',
+  'gg freaking ez',
   'sorry {victim}, my aim is set to "yes"',
   'beep boop, {victim} has been deleted',
   '{victim} did you try turning your aim on and off again?',
