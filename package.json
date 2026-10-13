@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "WebGun - browser Gun Game FPS (Three.js + Socket.io)",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "node --watch server/server.js & vite",
     "dev:server": "node --watch server/server.js",
@@ -20,6 +22,8 @@
     "three": "^0.180.0"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
     "vite": "^7.1.0"
   }
 }

@@ -21,8 +21,12 @@ export function startServer({ port = Number(process.env.PORT) || 3000, clientOri
   // Serve the built client when present so a single host can run everything.
   const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../client/dist');
   if (existsSync(dist)) {
-    app.use(express.static(dist));
-    app.get('/{*splat}', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
+    // Hashed bundles never change, so cache them forever. Everything else (index.html, models) keeps its URL
+    // across builds, so browsers must revalidate it or they keep running the previous build.
+    const cacheControl = (res, file) => res.setHeader('Cache-Control',
+      file.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache');
+    app.use(express.static(dist, { setHeaders: cacheControl }));
+    app.get('/{*splat}', (_req, res) => res.sendFile(path.join(dist, 'index.html'), { headers: { 'Cache-Control': 'no-cache' } }));
   }
 
   io.on('connection', (socket) => {

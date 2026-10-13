@@ -1,7 +1,9 @@
 # WebGun
 
-Browser-based low-poly multiplayer **Gun Game** FPS. Every kill upgrades your weapon
-(Pistol → Shotgun → Assault Rifle → Sniper → Combat Knife); the first kill with the knife wins the match.
+Browser-based low-poly multiplayer **Gun Game** FPS. Every kill moves you up a 13-weapon ladder
+(Pistol → Heavy Pistol → SMG → Shotgun → Machine Pistol → Assault Rifle → Auto Shotgun → Battle Rifle →
+LMG → Marksman Rifle → Sniper → Flamethrower → Combat Knife); the first kill with the knife wins the match.
+Weapon stats, order and models all live in `WEAPON_TIERS` in `shared/constants.js`.
 
 - **Client:** Three.js + Vite (vanilla ES modules), served from Vercel.
 - **Server:** Node.js + Express + Socket.io, authoritative 30 Hz simulation (Railway / Render / Fly.io).
@@ -60,8 +62,17 @@ wall occlusion, magazines and reloads, spoofed origins, lag compensation, knife 
 **Client (Vercel):** `vercel.json` builds with `npm run build` and serves `client/dist`.
 Set `VITE_SERVER_URL` to the server URL in the Vercel project's environment variables.
 
-## Custom models
+## Weapon models
 
-Drop `.glb` files into `client/public/models/` using the names in `WEAPON_TIERS`
-(`pistol.glb`, `shotgun.glb`, `rifle.glb`, `sniper.glb`, `knife.glb`). Missing files fall back to
-the built-in procedural low-poly models.
+Gun models come from [Low poly guns](https://sketchfab.com/3d-models/low-poly-guns-68cbd757dacb4d0e82cf8f06fcde0a46)
+by [Cosmo](https://sketchfab.com/cosmoart) (Sketchfab Standard license). The pack ships as one GLB with every gun on a wall;
+`scripts/split-guns.mjs` splits it into one GLB per gun in `client/public/models/guns/` (29 guns, listed in `index.json`):
+each is a single mesh, centered, barrel down -Z, with a `muzzle` node at the barrel tip.
+
+```bash
+node scripts/split-guns.mjs ~/Downloads/low_poly_guns.glb
+```
+
+To use a different model for a tier, point its `model` in `WEAPON_TIERS` at any GLB under `client/public/models/`
+(barrel along -Z; it's scaled to the weapon's `viewLength`). Missing files fall back to the built-in procedural
+low-poly models — the Combat Knife uses one, since the pack has no knife.

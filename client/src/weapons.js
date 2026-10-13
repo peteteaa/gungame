@@ -26,27 +26,27 @@ function buildProceduralGun(weapon) {
   const g = new THREE.Group();
   const c = weapon.color;
   let muzzleZ = -0.3;
-  switch (weapon.tier) {
-    case 1:
+  switch (weapon.kind) {
+    case 'pistol':
       box(g, 0.05, 0.06, 0.24, 0, 0, -0.1, c);
       box(g, 0.045, 0.12, 0.06, 0, -0.08, 0.0, DARK, 0.2);
       muzzleZ = -0.23;
       break;
-    case 2:
+    case 'shotgun':
       barrel(g, 0.025, 0.6, -0.3, 0, c);
       barrel(g, 0.02, 0.45, -0.25, -0.045, DARK);
       box(g, 0.06, 0.05, 0.14, 0, -0.045, -0.25, c); // pump
       box(g, 0.06, 0.1, 0.3, 0, -0.03, 0.15, c);
       muzzleZ = -0.6;
       break;
-    case 3:
+    case 'rifle':
       box(g, 0.06, 0.08, 0.45, 0, 0, -0.1, c);
       barrel(g, 0.015, 0.3, -0.45, 0.01, DARK);
       box(g, 0.04, 0.14, 0.06, 0, -0.1, -0.05, DARK, 0.2); // magazine
       box(g, 0.05, 0.09, 0.2, 0, -0.01, 0.2, c);
       muzzleZ = -0.6;
       break;
-    case 4:
+    case 'sniper':
       box(g, 0.05, 0.07, 0.5, 0, 0, 0, c);
       barrel(g, 0.015, 0.6, -0.5, 0.01, DARK);
       barrel(g, 0.03, 0.22, -0.05, 0.08, DARK); // scope
@@ -70,23 +70,40 @@ const loader = new GLTFLoader();
 const modelCache = new Map();
 function loadModel(weapon) {
   if (!modelCache.has(weapon.model)) {
-    modelCache.set(weapon.model, loader.loadAsync(`/${weapon.model}`).then((gltf) => gltf.scene).catch(() => null));
+    modelCache.set(weapon.model, loader.loadAsync(`/${weapon.model}`).then((gltf) => {
+      // Low-poly packs color via a tiny palette texture; smooth filtering blends neighboring swatches into stripes.
+      gltf.scene.traverse((o) => {
+        const map = o.material?.map;
+        if (!map) return;
+        map.magFilter = map.minFilter = THREE.NearestFilter;
+        map.generateMipmaps = false;
+        map.needsUpdate = true;
+      });
+      return gltf.scene;
+    }).catch(() => null));
   }
   return modelCache.get(weapon.model);
 }
 
+// Fit a loaded model (barrel down -Z) to the weapon's viewLength so every model reads at a consistent size,
+// with its rear quarter behind the origin, where the hand is.
+// The muzzle comes from the model's "muzzle" node when present, else the center of its front face.
 function fitModel(scene, weapon) {
+  const length = weapon.viewLength;
   const root = new THREE.Group();
-  const model = scene.clone(true);
+  const model = scene.clone(true); // shares geometry/materials with the cached scene
+  model.traverse((o) => { if (o.isMesh) o.userData.shared = true; });
   const size = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
-  const target = weapon.tier === FINAL_TIER ? 0.35 : 0.6;
-  model.scale.multiplyScalar(target / (Math.max(size.x, size.y, size.z) || 1));
+  model.scale.multiplyScalar(length / (size.z || 1));
   const box = new THREE.Box3().setFromObject(model);
   const center = box.getCenter(new THREE.Vector3());
-  model.position.sub(center);
+  model.position.set(-center.x, -center.y, length * 0.25 - box.max.z);
   root.add(model);
-  const muzzle = new THREE.Object3D();
-  muzzle.position.set(0, 0, box.min.z - center.z);
+  root.updateMatrixWorld(true);
+  const muzzle = new THREE.Object3D(); // unscaled, so the muzzle flash keeps its size
+  const marker = model.getObjectByName('muzzle');
+  if (marker) marker.getWorldPosition(muzzle.position);
+  else muzzle.position.set(0, 0, length * 0.25 - (box.max.z - box.min.z));
   root.add(muzzle);
   root.userData.muzzle = muzzle;
   return root;
@@ -219,20 +236,36 @@ export function createRemotePlayer(state) {
   box(head, 0.3, 0.3, 0.3, 0, 0, 0, 0xe0b890);
   box(head, 0.24, 0.07, 0.04, 0, 0.03, -0.15, 0x111111); // visor shows facing
   root.add(head);
-  const weaponBox = box(root, 0.06, 0.08, 0.5, 0.3, 1.2, -0.3, 0x555555);
+  const hand = new THREE.Group(); // held weapon: box placeholder until the tier's model loads
+  hand.position.set(0.3, 1.2, -0.2);
+  root.add(hand);
+  const weaponBox = box(hand, 0.06, 0.08, 0.5, 0, 0, -0.1, 0x555555);
+  let gunModel = null;
   root.add(labelSprite(state.username || 'player'));
   let tier = 0;
+  let disposed = false;
 
   return {
     mesh: root,
     setTier(t) {
       if (t === tier) return;
       tier = t;
-      weaponBox.material.color.setHex(getWeapon(t).color);
+      const weapon = getWeapon(t);
+      weaponBox.material.color.setHex(weapon.color);
+      weaponBox.visible = true;
+      if (gunModel) { hand.remove(gunModel); gunModel = null; }
+      loadModel(weapon).then((scene) => {
+        if (!scene || tier !== t || disposed) return;
+        gunModel = fitModel(scene, weapon);
+        hand.add(gunModel);
+        weaponBox.visible = false;
+      });
     },
     setPitch(rx) { head.rotation.x = rx; },
     dispose() {
+      disposed = true;
       root.traverse((o) => {
+        if (o.userData.shared) return; // gun models share GPU resources with the load cache
         if (o.geometry) o.geometry.dispose();
         if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
       });

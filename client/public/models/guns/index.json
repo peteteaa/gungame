@@ -1,0 +1,555 @@
+{
+  "source": {
+    "author": "Cosmo (https://sketchfab.com/cosmoart)",
+    "license": "SKETCHFAB Standard (https://sketchfab.com/licenses)",
+    "source": "https://sketchfab.com/3d-models/low-poly-guns-68cbd757dacb4d0e82cf8f06fcde0a46",
+    "title": "Low poly guns"
+  },
+  "orientation": "Y up, barrel along -Z, centered on the bounding box, meters",
+  "guns": [
+    {
+      "name": "flamethrower",
+      "file": "flamethrower.glb",
+      "parts": [
+        "flamethrower",
+        "flamethrower_charger_1",
+        "flamethrower_charger_2",
+        "flamethrower_scope"
+      ],
+      "size": [
+        0.087,
+        0.29,
+        0.628
+      ],
+      "muzzle": [
+        0,
+        0.0806,
+        -0.3139
+      ]
+    },
+    {
+      "name": "pistol_1",
+      "file": "pistol_1.glb",
+      "parts": [
+        "pistol_1",
+        "pistol_charger_1"
+      ],
+      "size": [
+        0.061,
+        0.23,
+        0.331
+      ],
+      "muzzle": [
+        0,
+        0.0775,
+        -0.1655
+      ]
+    },
+    {
+      "name": "pistol_2",
+      "file": "pistol_2.glb",
+      "parts": [
+        "pistol_2",
+        "pistol_charger_2"
+      ],
+      "size": [
+        0.052,
+        0.212,
+        0.325
+      ],
+      "muzzle": [
+        0,
+        0.0802,
+        -0.1623
+      ]
+    },
+    {
+      "name": "pistol_3",
+      "file": "pistol_3.glb",
+      "parts": [
+        "pistol_3",
+        "pistol_charger_3"
+      ],
+      "size": [
+        0.052,
+        0.202,
+        0.286
+      ],
+      "muzzle": [
+        0,
+        0.0685,
+        -0.1432
+      ]
+    },
+    {
+      "name": "pistol_4",
+      "file": "pistol_4.glb",
+      "parts": [
+        "pistol_4",
+        "pistol_charger_4"
+      ],
+      "size": [
+        0.074,
+        0.224,
+        0.295
+      ],
+      "muzzle": [
+        0,
+        0.0725,
+        -0.1474
+      ]
+    },
+    {
+      "name": "pistol_5",
+      "file": "pistol_5.glb",
+      "parts": [
+        "pistol_5",
+        "pistol_charger_5",
+        "pistol_scope_5"
+      ],
+      "size": [
+        0.08,
+        0.255,
+        0.44
+      ],
+      "muzzle": [
+        0,
+        0.042,
+        -0.2198
+      ]
+    },
+    {
+      "name": "pistol_6",
+      "file": "pistol_6.glb",
+      "parts": [
+        "pistol_6",
+        "pistol_charger_6"
+      ],
+      "size": [
+        0.095,
+        0.216,
+        0.345
+      ],
+      "muzzle": [
+        0.0004,
+        0.0422,
+        -0.1726
+      ]
+    },
+    {
+      "name": "rifle_1",
+      "file": "rifle_1.glb",
+      "parts": [
+        "fusil_1",
+        "fusil_charger_1",
+        "fusil_scope_1"
+      ],
+      "size": [
+        0.12,
+        0.312,
+        0.639
+      ],
+      "muzzle": [
+        0,
+        0.0646,
+        -0.3195
+      ]
+    },
+    {
+      "name": "rifle_2",
+      "file": "rifle_2.glb",
+      "parts": [
+        "fusil_2",
+        "fusil_charguer_2",
+        "fusil_handle_2",
+        "fusil_scope_2"
+      ],
+      "size": [
+        0.117,
+        0.304,
+        0.657
+      ],
+      "muzzle": [
+        0,
+        0.0716,
+        -0.3286
+      ]
+    },
+    {
+      "name": "rifle_3",
+      "file": "rifle_3.glb",
+      "parts": [
+        "fusil_3",
+        "fusil_charguer_3"
+      ],
+      "size": [
+        0.083,
+        0.255,
+        0.855
+      ],
+      "muzzle": [
+        -0.0006,
+        0.0596,
+        -0.4275
+      ]
+    },
+    {
+      "name": "rifle_4",
+      "file": "rifle_4.glb",
+      "parts": [
+        "fusil_4",
+        "fusil_charguer_4",
+        "fusil_scope_4"
+      ],
+      "size": [
+        0.106,
+        0.315,
+        0.627
+      ],
+      "muzzle": [
+        0,
+        0.0781,
+        -0.3137
+      ]
+    },
+    {
+      "name": "rifle_5",
+      "file": "rifle_5.glb",
+      "parts": [
+        "fusil_5",
+        "fusil_charguer_5",
+        "fusil_scope_5"
+      ],
+      "size": [
+        0.086,
+        0.362,
+        0.66
+      ],
+      "muzzle": [
+        0,
+        0.0639,
+        -0.33
+      ]
+    },
+    {
+      "name": "rifle_6",
+      "file": "rifle_6.glb",
+      "parts": [
+        "fusil_6",
+        "fusil_charguer_6",
+        "fusil_scope_6"
+      ],
+      "size": [
+        0.075,
+        0.302,
+        0.825
+      ],
+      "muzzle": [
+        0.0013,
+        0.031,
+        -0.4123
+      ]
+    },
+    {
+      "name": "rifle_7",
+      "file": "rifle_7.glb",
+      "parts": [
+        "fusil_7",
+        "fusil_charguer_7",
+        "fusil_scope_7"
+      ],
+      "size": [
+        0.084,
+        0.229,
+        0.759
+      ],
+      "muzzle": [
+        -0.0007,
+        0.0259,
+        -0.3793
+      ]
+    },
+    {
+      "name": "shotgun_1",
+      "file": "shotgun_1.glb",
+      "parts": [
+        "shotgun_1",
+        "shotgun_charguer_1"
+      ],
+      "size": [
+        0.077,
+        0.187,
+        0.713
+      ],
+      "muzzle": [
+        0,
+        0.0651,
+        -0.3566
+      ]
+    },
+    {
+      "name": "shotgun_2",
+      "file": "shotgun_2.glb",
+      "parts": [
+        "shotgun_2"
+      ],
+      "size": [
+        0.077,
+        0.2,
+        0.741
+      ],
+      "muzzle": [
+        0,
+        0.0508,
+        -0.3703
+      ]
+    },
+    {
+      "name": "smg_1",
+      "file": "smg_1.glb",
+      "parts": [
+        "subfusil_1",
+        "subfusil_charguer_1",
+        "subfusil_scope_1"
+      ],
+      "size": [
+        0.08,
+        0.297,
+        0.637
+      ],
+      "muzzle": [
+        -0.0003,
+        0.0454,
+        -0.3186
+      ]
+    },
+    {
+      "name": "smg_2",
+      "file": "smg_2.glb",
+      "parts": [
+        "subfusil_2",
+        "subfusil_charguer_2",
+        "subfusil_handle_2",
+        "subfusil_scope_2"
+      ],
+      "size": [
+        0.094,
+        0.293,
+        0.674
+      ],
+      "muzzle": [
+        -0.0004,
+        0.0844,
+        -0.3368
+      ]
+    },
+    {
+      "name": "smg_3",
+      "file": "smg_3.glb",
+      "parts": [
+        "subfusil_3",
+        "subfusil_charguer_3",
+        "subfusil_handle_3"
+      ],
+      "size": [
+        0.09,
+        0.268,
+        0.601
+      ],
+      "muzzle": [
+        0.0023,
+        0.0617,
+        -0.3005
+      ]
+    },
+    {
+      "name": "smg_4",
+      "file": "smg_4.glb",
+      "parts": [
+        "subfusil_4",
+        "subfusil_charguer_4"
+      ],
+      "size": [
+        0.09,
+        0.239,
+        0.658
+      ],
+      "muzzle": [
+        -0.0013,
+        0.0437,
+        -0.3292
+      ]
+    },
+    {
+      "name": "smg_5",
+      "file": "smg_5.glb",
+      "parts": [
+        "subfusil_5",
+        "subfusil_charguer_5",
+        "subfusil_scope_5"
+      ],
+      "size": [
+        0.079,
+        0.279,
+        0.626
+      ],
+      "muzzle": [
+        0,
+        0.0668,
+        -0.3131
+      ]
+    },
+    {
+      "name": "smg_6",
+      "file": "smg_6.glb",
+      "parts": [
+        "subfusil_6",
+        "subfusil_charguer_6",
+        "subfusil_handle_6",
+        "subfusil_scope_6"
+      ],
+      "size": [
+        0.079,
+        0.264,
+        0.548
+      ],
+      "muzzle": [
+        0,
+        0.0517,
+        -0.274
+      ]
+    },
+    {
+      "name": "smg_7",
+      "file": "smg_7.glb",
+      "parts": [
+        "subfusil_7",
+        "subfusil_charguer_7",
+        "subfusil_scope_7"
+      ],
+      "size": [
+        0.068,
+        0.253,
+        0.588
+      ],
+      "muzzle": [
+        -0.0016,
+        0.037,
+        -0.294
+      ]
+    },
+    {
+      "name": "smg_8",
+      "file": "smg_8.glb",
+      "parts": [
+        "subfusil_8",
+        "subfusil_charguer_8",
+        "subfusil_scope_8"
+      ],
+      "size": [
+        0.085,
+        0.25,
+        0.59
+      ],
+      "muzzle": [
+        0,
+        0.016,
+        -0.295
+      ]
+    },
+    {
+      "name": "smg_9",
+      "file": "smg_9.glb",
+      "parts": [
+        "subfusil_9",
+        "subfusil_charguer_9",
+        "subfusil_scope_9"
+      ],
+      "size": [
+        0.084,
+        0.3,
+        0.565
+      ],
+      "muzzle": [
+        0,
+        0.0265,
+        -0.2826
+      ]
+    },
+    {
+      "name": "smg_10",
+      "file": "smg_10.glb",
+      "parts": [
+        "subfusil_10",
+        "subfusil_charguer_10",
+        "subfusil_scope_10"
+      ],
+      "size": [
+        0.066,
+        0.297,
+        0.568
+      ],
+      "muzzle": [
+        0,
+        0.0464,
+        -0.284
+      ]
+    },
+    {
+      "name": "sniper_0",
+      "file": "sniper_0.glb",
+      "parts": [
+        "sniper_0",
+        "sniper_scope_0"
+      ],
+      "size": [
+        0.194,
+        0.242,
+        0.915
+      ],
+      "muzzle": [
+        0,
+        0.0685,
+        -0.4576
+      ]
+    },
+    {
+      "name": "sniper_1",
+      "file": "sniper_1.glb",
+      "parts": [
+        "sniper_1",
+        "sniper_charger_1",
+        "sniper_scope_1"
+      ],
+      "size": [
+        0.089,
+        0.256,
+        0.818
+      ],
+      "muzzle": [
+        0,
+        0.0437,
+        -0.4091
+      ]
+    },
+    {
+      "name": "sniper_2",
+      "file": "sniper_2.glb",
+      "parts": [
+        "sniper_2",
+        "sniper_charger_2",
+        "sniper_scope_2"
+      ],
+      "size": [
+        0.07,
+        0.246,
+        0.839
+      ],
+      "muzzle": [
+        0,
+        0.0337,
+        -0.4194
+      ]
+    }
+  ]
+}
