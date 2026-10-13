@@ -177,7 +177,8 @@ net.on(EVENTS.SHOT_FIRED, (d) => {
   if (d.tier === FINAL_TIER) return; // knife: no tracer
   const start = new THREE.Vector3();
   if (d.id === myId) viewmodel.muzzleWorld(start); else start.set(d.origin.x, d.origin.y, d.origin.z);
-  for (const end of d.ends) effects.tracer(start, end);
+  const draw = getWeapon(d.tier).effect === 'flame' ? effects.flame : effects.tracer;
+  for (const end of d.ends) draw(start, end);
 });
 
 net.on(EVENTS.MATCH_OVER, (d) => hud.showBanner(`${d.username} WINS`, d.restartIn));

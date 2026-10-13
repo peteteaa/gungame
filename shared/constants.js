@@ -24,7 +24,7 @@ export const PLAYER = {
 // One kill = one tier up; a kill with the last weapon (the knife) wins the match.
 // fireRate = minimum ms between shots. damage = total damage per shot (split across pellets).
 // magSize = rounds per magazine (0 = melee, never reloads). reloadMs = time to refill the magazine.
-// kind picks the procedural fallback model; viewLength = first-person length in meters; model = GLB under client/public.
+// effect: 'flame' draws fire particles instead of tracers. kind picks the procedural fallback model; viewLength = first-person length in meters; model = GLB under client/public.
 const W = (name, kind, model, viewLength, color, stats) => ({ name, kind, model: `models/${model}.glb`, viewLength, color, ...stats });
 export const WEAPON_TIERS = [
   W('Pistol', 'pistol', 'guns/pistol_1', 0.28, 0x555555, { fireRate: 400, damage: 35, range: 80, pellets: 1, spread: 0, auto: false, magSize: 8, reloadMs: 1200 }),
@@ -38,7 +38,7 @@ export const WEAPON_TIERS = [
   W('LMG', 'rifle', 'guns/rifle_4', 0.65, 0x333a2a, { fireRate: 90, damage: 22, range: 100, pellets: 1, spread: 0.025, auto: true, magSize: 60, reloadMs: 3200 }),
   W('Marksman Rifle', 'sniper', 'guns/sniper_1', 0.75, 0x283040, { fireRate: 450, damage: 60, range: 160, pellets: 1, spread: 0, auto: false, magSize: 10, reloadMs: 2200 }),
   W('Sniper', 'sniper', 'guns/sniper_2', 0.8, 0x1f2a36, { fireRate: 1500, damage: 100, range: 200, pellets: 1, spread: 0, auto: false, magSize: 5, reloadMs: 2200 }),
-  W('Flamethrower', 'rifle', 'guns/flamethrower', 0.55, 0x8a3b12, { fireRate: 70, damage: 10, range: 9, pellets: 3, spread: 0.12, auto: true, magSize: 50, reloadMs: 2500 }),
+  W('Flamethrower', 'rifle', 'guns/flamethrower', 0.55, 0x8a3b12, { fireRate: 70, damage: 10, range: 9, pellets: 3, spread: 0.12, auto: true, magSize: 50, reloadMs: 2500, effect: 'flame' }),
   W('Combat Knife', 'knife', 'knife', 0.35, 0xb0b0b0, { fireRate: 300, damage: 100, range: 2.5, pellets: 1, spread: 0, auto: false, magSize: 0, reloadMs: 0 }), // winning tier
 ].map((w, i) => ({ tier: i + 1, ...w }));
 export const FINAL_TIER = WEAPON_TIERS.length;
