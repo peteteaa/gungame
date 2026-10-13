@@ -1,6 +1,6 @@
 // Authoritative Gun Game simulation: rooms, movement validation, hit detection, tier progression.
 import {
-  EVENTS, MAX_PLAYERS_PER_ROOM, MAX_HEALTH, RESPAWN_DELAY_MS, MATCH_RESTART_DELAY_MS,
+  EVENTS, MAX_PLAYERS_PER_ROOM, MAX_HEALTH, HEALTH_REGEN, RESPAWN_DELAY_MS, MATCH_RESTART_DELAY_MS,
   INTERPOLATION_DELAY_MS, MAX_REWIND_MS, PLAYER, MAP, FINAL_TIER, getWeapon,
   rayAABB, mapColliders, playerAABB, HEADSHOT_MULTIPLIER, CONTRACT_VERSION,
 } from '../shared/constants.js';
@@ -121,7 +121,7 @@ export class Room {
   emit(event, payload) { this.io.to(this.id).emit(event, payload); }
 
   serialize(p) {
-    return { id: p.id, username: p.username, x: p.x, y: p.y, z: p.z, ry: p.ry, rx: p.rx, tier: p.tier, health: p.health, alive: p.alive, kills: p.kills };
+    return { id: p.id, username: p.username, x: p.x, y: p.y, z: p.z, ry: p.ry, rx: p.rx, tier: p.tier, health: Math.ceil(p.health), alive: p.alive, kills: p.kills };
   }
 
   serializeAll() {
@@ -192,7 +192,7 @@ export class Room {
     const prevMoveAt = p.lastMoveAt;
     const dt = clamp((now - prevMoveAt) / 1000, 0, 1);
     p.lastMoveAt = now;
-    p.moveBudget = Math.min(p.moveBudget + PLAYER.moveSpeed * MOVE_TOLERANCE * dt, MOVE_BURST);
+    p.moveBudget = Math.min(p.moveBudget + PLAYER.sprintSpeed * MOVE_TOLERANCE * dt, MOVE_BURST); // sprint is the top speed
 
     const y = Math.max(0, data.y);
     const horiz = Math.hypot(data.x - p.x, data.z - p.z);
@@ -353,7 +353,8 @@ export class Room {
     if (!target.alive || !this.matchActive) return;
     if (target.isDummy && attacker.username.toLowerCase() !== DUMMY_KILLER) return;
     target.health = Math.max(0, target.health - damage);
-    this.emit(EVENTS.PLAYER_HIT, { targetId: target.id, attackerId: attacker.id, health: target.health, damage, headshot });
+    target.lastDamagedAt = now;
+    this.emit(EVENTS.PLAYER_HIT, { targetId: target.id, attackerId: attacker.id, health: Math.ceil(target.health), damage, headshot });
     if (target.health <= 0) this.handleKill(attacker, target, now, weapon, headshot);
   }
 
@@ -406,8 +407,17 @@ export class Room {
     this.emit(EVENTS.MATCH_RESTART, { players: this.serializeAll() });
   }
 
+  // Health regenerates (fractionally; clients see it rounded up) once a player has gone a while undamaged.
+  regenerate(p, now, dt) {
+    if (!p.alive || p.health >= MAX_HEALTH || now - (p.lastDamagedAt ?? 0) < HEALTH_REGEN.delayMs) return;
+    p.health = Math.min(MAX_HEALTH, p.health + HEALTH_REGEN.perSecond * dt);
+  }
+
   tick(now = Date.now()) {
+    const dt = this.lastTickAt ? clamp((now - this.lastTickAt) / 1000, 0, 0.25) : 0;
+    this.lastTickAt = now;
     for (const p of this.players.values()) {
+      this.regenerate(p, now, dt);
       this.updateReload(p, now);
       this.applyGravity(p, now);
       p.history.push({ t: now, x: p.x, y: p.y, z: p.z });

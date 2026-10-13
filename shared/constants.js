@@ -4,6 +4,8 @@
 export const TICK_RATE = 30; // server simulation ticks per second
 export const MAX_PLAYERS_PER_ROOM = 8;
 export const MAX_HEALTH = 100;
+// Health comes back on its own after a while without taking damage.
+export const HEALTH_REGEN = { delayMs: 4000, perSecond: 20 };
 export const RESPAWN_DELAY_MS = 2000;
 export const MATCH_RESTART_DELAY_MS = 8000;
 
@@ -18,6 +20,7 @@ export const PLAYER = {
   eyeHeight: 1.6, // feet to camera
   headY: 1.5, // feet to the bottom of the head; hits from here up to `height` are headshots
   moveSpeed: 8, // units / second
+  sprintSpeed: 12, // holding Shift while moving forward (not while firing)
   jumpVelocity: 7,
   gravity: 20,
 };

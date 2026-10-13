@@ -18,6 +18,7 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
   let mouseDown = false;
   let pressed = false;
   let moving = false;
+  let sprinting = false;
 
   const rig = new THREE.Object3D(); // yaw
   const pitchObj = new THREE.Object3D();
@@ -94,8 +95,11 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
     f /= len; r /= len;
     const sin = Math.sin(yaw);
     const cos = Math.cos(yaw);
-    vel.x = (-sin * f + cos * r) * PLAYER.moveSpeed;
-    vel.z = (-cos * f - sin * r) * PLAYER.moveSpeed;
+    // Sprint: Shift while moving forward; firing drops you back to walking speed.
+    sprinting = enabled && f > 0 && !mouseDown && (keys.has('ShiftLeft') || keys.has('ShiftRight'));
+    const speed = sprinting ? PLAYER.sprintSpeed : PLAYER.moveSpeed;
+    vel.x = (-sin * f + cos * r) * speed;
+    vel.z = (-cos * f - sin * r) * speed;
     moving = enabled && (f !== 0 || r !== 0) && grounded;
     if (enabled && grounded && keys.has('Space')) { vel.y = PLAYER.jumpVelocity; grounded = false; }
     vel.y -= PLAYER.gravity * dt;
@@ -125,6 +129,7 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
     set yaw(v) { yaw = v; },
     get mouseDown() { return mouseDown; },
     get moving() { return moving; },
+    get sprinting() { return sprinting; },
     consumePress() { const p = pressed; pressed = false; return p; },
     releaseFire() { mouseDown = false; pressed = false; },
   };

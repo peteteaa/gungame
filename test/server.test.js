@@ -4,7 +4,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { io as connect } from 'socket.io-client';
 import { startServer } from '../server/server.js';
-import { EVENTS, PLAYER, FINAL_TIER, MAX_HEALTH, WEAPON_TIERS, HEADSHOT_MULTIPLIER, getWeapon } from '../shared/constants.js';
+import { EVENTS, PLAYER, FINAL_TIER, MAX_HEALTH, HEALTH_REGEN, WEAPON_TIERS, HEADSHOT_MULTIPLIER, getWeapon } from '../shared/constants.js';
 
 let server;
 let url;
@@ -148,6 +148,20 @@ test('the flamethrower gets no headshot bonus', async () => {
   b.socket.disconnect();
 });
 
+test('health regenerates after a while without damage, not before', async () => {
+  const a = await joinPlayer('Healer');
+  const b = await joinPlayer('Bleeder');
+  const { p: healing } = place(a.joined.id, 10, 5, { health: 40, lastDamagedAt: Date.now() - HEALTH_REGEN.delayMs - 100 });
+  const { p: hurt } = place(b.joined.id, -10, 5, { health: 40, lastDamagedAt: Date.now() });
+  await sleep(300);
+  assert.ok(healing.health > 40 && healing.health < MAX_HEALTH, `regen should have started (health ${healing.health})`);
+  assert.equal(hurt.health, 40, 'no regen inside the delay');
+  const state = await once(a.socket, EVENTS.STATE_UPDATE);
+  assert.ok(Number.isInteger(state.players[a.joined.id].health), 'clients get whole numbers');
+  a.socket.disconnect();
+  b.socket.disconnect();
+});
+
 test('fire rate is enforced server-side', async () => {
   const a = await joinPlayer('Spammer');
   const b = await joinPlayer('Victim');
@@ -167,7 +181,8 @@ test('spamming tiny moves cannot exceed max speed', async () => {
   const { p } = place(joined.id, -10, 5, { lastMoveAt: Date.now() });
   for (let i = 1; i <= 20; i++) socket.emit(EVENTS.PLAYER_MOVE, { x: -10 + i * 0.7, y: 0, z: 5, ry: 0, rx: 0 });
   await new Promise((r) => setTimeout(r, 150));
-  assert.ok(p.x - -10 < 3, `moved ${(p.x + 10).toFixed(2)} units in ~150ms`);
+  // 14 units attempted; the budget allows a 1.5-unit burst plus sprint speed x tolerance (~2.7 units in 150ms).
+  assert.ok(p.x - -10 < 5, `moved ${(p.x + 10).toFixed(2)} units in ~150ms`);
   socket.disconnect();
 });
 
@@ -206,6 +221,16 @@ test('a normal running jump is accepted', async () => {
   points.push({ x: points.at(-1).x + 0.2, y: 0, z: 5 });
   assert.deepEqual(await sendPath(socket, points), []);
   assert.equal(p.y, 0);
+  socket.disconnect();
+});
+
+test('sprinting at full sprint speed is accepted', async () => {
+  const { socket, joined } = await joinPlayer('Sprinter');
+  const { p } = place(joined.id, -10, 5, { lastMoveAt: Date.now() });
+  const points = [];
+  for (let t = SEND_MS / 1000; t <= 1; t += SEND_MS / 1000) points.push({ x: -10 + PLAYER.sprintSpeed * t, y: 0, z: 5 });
+  assert.deepEqual(await sendPath(socket, points), []);
+  assert.ok(p.x > -10 + PLAYER.sprintSpeed * 0.9);
   socket.disconnect();
 });
 
@@ -416,7 +441,7 @@ test('only a player named ggez can kill the test dummy; it respawns in place', a
   const dummy = room.players.get('dummy');
   assert.ok(dummy && other.joined.players.dummy, 'room should include the dummy');
   assert.equal(server.game.stats().players, 1); // the dummy isn't a connected player
-  dummy.health = 10;
+  Object.assign(dummy, { health: 10, lastDamagedAt: Date.now() }); // recently hurt, so it isn't regenerating
 
   place(other.joined.id, 0, 16);
   const ignored = silent(other.socket, EVENTS.PLAYER_HIT);

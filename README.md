@@ -23,7 +23,7 @@ Or build once and let the server host everything on one port: `npm run build && 
 
 ## Controls
 
-Click to lock the mouse · WASD move · Space jump · Left click fire (hold for the rifle) · R reload · Tab scoreboard
+Click to lock the mouse · WASD move · Shift sprint · Space jump · Left click fire (hold for the rifle) · R reload · Tab scoreboard
 
 ## Server authority
 
@@ -41,6 +41,7 @@ between snapshots. The server never trusts the client for outcomes:
 | Shotgun spread is rolled server-side (clients can't send perfectly tight pellets) | `applySpread` |
 | Lag compensation: targets rewound up to 300 ms using per-tick position history | `Room.positionAt` |
 | Damage, deaths, tier upgrades, respawns, match win/restart | `applyDamage` / `handleKill` |
+| Health regen: 20 HP/s after 4 s without damage (`HEALTH_REGEN`) | `Room.regenerate` |
 
 There is intentionally no client-sent "playerKill" event — kills are only ever derived from server hit detection.
 

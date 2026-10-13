@@ -8,6 +8,8 @@ import { createViewmodel, createRemotePlayer } from './weapons.js';
 import { createHud } from './hud.js';
 
 const MOVE_SEND_MS = 1000 / 30;
+const FOV = 75;
+const SPRINT_FOV = 83;
 
 // ---- Renderer / scene ----
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -17,7 +19,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 document.getElementById('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 300);
+const camera = new THREE.PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, 0.05, 300);
 buildWorld(scene);
 
 window.addEventListener('resize', () => {
@@ -307,7 +309,10 @@ function frame(now) {
       hud.renderScoreboard(net.latest(), myId);
     }
   }
-  viewmodel.update(dt, controls.moving && alive);
+  const sprinting = controls.sprinting && controls.moving && alive;
+  viewmodel.update(dt, controls.moving && alive, sprinting);
+  const fov = camera.fov + ((sprinting ? SPRINT_FOV : FOV) - camera.fov) * Math.min(1, dt * 8);
+  if (Math.abs(fov - camera.fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   effects.update(dt);
   renderer.render(scene, camera);
 }

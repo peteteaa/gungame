@@ -136,6 +136,7 @@ export function createViewmodel(camera, effects) {
   let stab = 0;
   let reload = null; // { t, ms }
   let bobT = 0;
+  let sprintK = 0; // 0 = aiming, 1 = gun lowered for sprinting
 
   function mount(group) {
     if (current) holder.remove(current);
@@ -168,10 +169,11 @@ export function createViewmodel(camera, effects) {
   function startReload(ms) { reload = { t: 0, ms }; }
   function cancelReload() { reload = null; }
 
-  function update(dt, moving) {
+  function update(dt, moving, sprinting = false) {
     kick = Math.max(0, kick - dt * 8);
     stab = Math.max(0, stab - dt * 4);
-    bobT += dt * (moving ? 9 : 0);
+    bobT += dt * (moving ? (sprinting ? 13 : 9) : 0);
+    sprintK += ((sprinting ? 1 : 0) - sprintK) * Math.min(1, dt * 10); // eases the gun down/up
     let drop = 0;
     if (swap) {
       swap.t += dt * 1000;
@@ -190,14 +192,15 @@ export function createViewmodel(camera, effects) {
     }
     const bobAmt = moving ? 1 : 0;
     const stabK = Math.sin(stab * Math.PI);
+    const bobScale = 1 + sprintK * 1.5;
     holder.position.set(
-      base.x + Math.cos(bobT) * 0.012 * bobAmt - stabK * 0.1,
-      base.y + Math.abs(Math.sin(bobT)) * 0.014 * bobAmt - drop,
+      base.x + Math.cos(bobT) * 0.012 * bobAmt * bobScale - stabK * 0.1 - sprintK * 0.06,
+      base.y + Math.abs(Math.sin(bobT)) * 0.014 * bobAmt * bobScale - drop - sprintK * 0.07,
       base.z + kick * 0.06 - stabK * 0.25,
     );
-    holder.rotation.x = kick * 0.12 + stabK * 0.5;
-    holder.rotation.z = tilt;
-    holder.rotation.y = stabK * 0.4;
+    holder.rotation.x = kick * 0.12 + stabK * 0.5 - sprintK * 0.25;
+    holder.rotation.z = tilt + sprintK * 0.3;
+    holder.rotation.y = stabK * 0.4 + sprintK * 0.6;
   }
 
   function muzzleWorld(target) {
