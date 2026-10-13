@@ -3,7 +3,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { io as connect } from 'socket.io-client';
 import { startServer } from '../server/server.js';
-import { EVENTS, PLAYER, FINAL_TIER, MAX_HEALTH } from '../shared/constants.js';
+import { EVENTS, PLAYER, FINAL_TIER, MAX_HEALTH, getWeapon } from '../shared/constants.js';
 
 let server;
 let url;
@@ -315,4 +315,57 @@ test('empty rooms are cleaned up after everyone leaves', async () => {
   await new Promise((r) => setTimeout(r, 200));
   const res = await fetch(`${url}/health`).then((r) => r.json());
   assert.deepEqual(res, { ok: true, rooms: 0, players: 0 });
+});
+
+test('emptying the magazine auto-reloads, and shots during the reload are ignored', async () => {
+  const a = await joinPlayer('Dry');
+  const b = await joinPlayer('Wall');
+  const { p } = place(a.joined.id, 10, 5, { ammo: 1 });
+  place(b.joined.id, 10, -5);
+  const reloadStart = once(a.socket, EVENTS.AMMO);
+  const hit = once(a.socket, EVENTS.PLAYER_HIT);
+  fireAt(a.socket, { x: 10, z: 5 }, { x: 0, y: 0, z: -1 });
+  await hit;
+  assert.deepEqual(await reloadStart, { ammo: 0, reloading: true, reloadMs: getWeapon(1).reloadMs });
+
+  p.lastFireAt = 0;
+  const noHit = silent(a.socket, EVENTS.PLAYER_HIT);
+  fireAt(a.socket, { x: 10, z: 5 }, { x: 0, y: 0, z: -1 });
+  assert.ok(await noHit, 'shot during reload should be ignored');
+
+  const done = once(a.socket, EVENTS.AMMO);
+  p.reloadingUntil = Date.now(); // fast-forward; the tick loop completes it
+  assert.deepEqual(await done, { ammo: getWeapon(1).magSize, reloading: false, reloadMs: getWeapon(1).reloadMs });
+  a.socket.disconnect();
+  b.socket.disconnect();
+});
+
+test('manual reload only starts with a partly used magazine', async () => {
+  const { socket, joined } = await joinPlayer('Reloader');
+  const { p } = place(joined.id, 10, 5);
+  const ignored = silent(socket, EVENTS.AMMO);
+  socket.emit(EVENTS.RELOAD);
+  assert.ok(await ignored, 'full magazine should not reload');
+
+  p.ammo = 3;
+  const started = once(socket, EVENTS.AMMO);
+  socket.emit(EVENTS.RELOAD);
+  assert.equal((await started).reloading, true);
+  assert.ok(p.reloadingUntil > Date.now());
+  socket.disconnect();
+});
+
+test('a kill upgrade refills the new weapon and cancels a reload', async () => {
+  const a = await joinPlayer('Upgrader');
+  const b = await joinPlayer('Fodder');
+  const { p } = place(a.joined.id, 10, 5, { ammo: 1 }); // last round: the kill also triggers an auto-reload
+  const { p: victim } = place(b.joined.id, 10, -5);
+  victim.health = 10;
+  const upgrade = once(a.socket, EVENTS.TIER_UPGRADE);
+  fireAt(a.socket, { x: 10, z: 5 }, { x: 0, y: 0, z: -1 });
+  await upgrade;
+  assert.equal(p.ammo, getWeapon(2).magSize);
+  assert.equal(p.reloadingUntil, 0);
+  a.socket.disconnect();
+  b.socket.disconnect();
 });
