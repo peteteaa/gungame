@@ -303,6 +303,7 @@ function updateRemotes(dt) {
     let r = remotes.get(id);
     const pose = poses[id] || state;
     if (!r) {
+      hitch.created++;
       r = createRemotePlayer(state);
       r.mesh.position.set(pose.x, pose.y, pose.z);
       r.mesh.rotation.y = pose.ry;
@@ -326,12 +327,45 @@ function updateRemotes(dt) {
   }
 }
 
+// ---- Hitch logger ----
+// Stalls in a match are logged to the console with what happened around them, so a player can paste the line
+// into a bug report: new shaders compiled, players created, or a gap in server updates.
+const HITCH_MS = 200;
+const STATE_GAP_MS = 300;
+const hitch = { created: 0, prevWorkMs: 0, lastStateAt: 0, stateGapMs: 0 };
+net.on(EVENTS.STATE_UPDATE, () => {
+  const t = performance.now();
+  if (hitch.lastStateAt) hitch.stateGapMs = Math.max(hitch.stateGapMs, t - hitch.lastStateAt);
+  hitch.lastStateAt = t;
+});
+
+function reportHitch(gapMs, workMs, programsBefore) {
+  if (joined && workMs >= HITCH_MS) {
+    console.warn(`[hitch] frame took ${Math.round(workMs)}ms | new shaders ${renderer.info.programs.length - programsBefore}, `
+      + `players created ${hitch.created}, players ${remotes.size}, ping ${net.pingMs}ms`);
+  } else if (joined && gapMs >= HITCH_MS) {
+    if (hitch.prevWorkMs < HITCH_MS && !document.hidden) {
+      console.warn(`[hitch] ${Math.round(gapMs)}ms between frames, outside the game loop (garbage collection, browser or OS)`);
+    }
+  } else if (joined && hitch.stateGapMs > STATE_GAP_MS) {
+    // Only reported when frames were flowing: a stalled main thread delays these messages too.
+    console.warn(`[hitch] no server update for ${Math.round(hitch.stateGapMs)}ms | ping ${net.pingMs}ms`);
+  }
+  hitch.prevWorkMs = workMs;
+  hitch.stateGapMs = 0;
+  hitch.created = 0;
+}
+
 // ---- Loop ----
 let last = performance.now();
+document.addEventListener('visibilitychange', () => { last = performance.now(); }); // hidden tabs pause rAF
 let adsK = 0; // 0 = hip fire, 1 = fully aimed down sights
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.max(0, (now - last) / 1000); // first rAF timestamp can precede `last`
+  const started = performance.now();
+  const programsBefore = renderer.info.programs.length;
+  const gapMs = now - last;
+  const dt = Math.max(0, gapMs / 1000); // first rAF timestamp can precede `last`
   last = now;
 
   // Aim down sights: hold Q with a scoped gun (not while reloading).
@@ -372,6 +406,7 @@ function frame(now) {
   if (Math.abs(fov - camera.fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   effects.update(dt);
   renderer.render(scene, camera);
+  reportHitch(gapMs, performance.now() - started, programsBefore);
 }
 requestAnimationFrame(frame);
 
