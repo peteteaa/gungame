@@ -84,7 +84,7 @@ B Back. The open Mid courtyard links to A via Catwalk, to B via Market, and to d
 
 Maps live in `MAPS` in `shared/constants.js`. Ascent is drawn as ASCII, one character per 2x2-unit cell with north
 on the top row: `#` building, `X` big crate, `x` climbable crate, `G` generator, `a`/`b`/`c` steps up to a raised
-platform, `D`/`A`/`s` spawn points, `T` the test dummy. Edit the grid and both client and server pick it up.
+platform, `D`/`A`/`s` spawn points. Edit the grid and both client and server pick it up.
 The integration tests pin the server to the old `arena` layout (`test/use-arena-map.js`), so their positions stay valid.
 
 ## Weapon models

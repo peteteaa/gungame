@@ -409,20 +409,3 @@ test('a kill upgrade refills the new weapon and cancels a reload', async () => {
   a.socket.disconnect();
   b.socket.disconnect();
 });
-
-test('the test dummy can be shot, grants an upgrade, and respawns in place', async () => {
-  const { socket, joined } = await joinPlayer('Trainee');
-  const room = server.game.socketRoom.get(joined.id);
-  const dummy = room.players.get('dummy');
-  assert.ok(dummy && joined.players.dummy, 'room should include the dummy');
-  assert.equal(server.game.stats().players, 1); // the dummy isn't a connected player
-  place(joined.id, 0, 16);
-  dummy.health = 10;
-  const upgrade = once(socket, EVENTS.TIER_UPGRADE);
-  const respawn = once(socket, EVENTS.PLAYER_RESPAWN, 4000);
-  fireAt(socket, { x: 0, z: 16 }, { x: 0, y: 0, z: -1 });
-  assert.deepEqual(await upgrade, { id: joined.id, newTier: 2 });
-  const r = await respawn;
-  assert.deepEqual([r.id, r.x, r.z], ['dummy', 0, 10]);
-  socket.disconnect();
-});

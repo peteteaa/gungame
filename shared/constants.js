@@ -62,7 +62,7 @@ const TILES = {
   b: { h: 1.2, color: 0xb36a42 },
   c: { h: 1.8, color: 0xa85d38 },
 };
-const MARKERS = { D: 'spawn', A: 'spawn', s: 'spawn', T: 'dummy' }; // defender / attacker / extra spawns, test dummy
+const MARKERS = { D: 'spawn', A: 'spawn', s: 'spawn' }; // defender / attacker / extra spawns
 
 function parseMap({ rows, ...rest }) {
   const n = rows.length;
@@ -71,13 +71,11 @@ function parseMap({ rows, ...rest }) {
   const used = rows.map(() => Array(n).fill(false));
   const boxes = [];
   const spawnPoints = [];
-  let dummySpot = null;
   for (let r = 0; r < n; r++) {
     if (rows[r].length !== n) throw new Error(`map row ${r} is ${rows[r].length} wide; rows must form a square`);
     for (let c = 0; c < n; c++) {
       const ch = rows[r][c];
       if (MARKERS[ch] === 'spawn') spawnPoints.push(at(c, r));
-      else if (MARKERS[ch] === 'dummy') dummySpot = at(c, r);
       else if (ch !== '.' && !TILES[ch]) throw new Error(`unknown map tile '${ch}' at column ${c}, row ${r}`);
       if (!TILES[ch] || used[r][c]) continue;
       // Greedy merge: widen along the row, then grow down while the whole span still matches.
@@ -92,7 +90,7 @@ function parseMap({ rows, ...rest }) {
       boxes.push({ x: -half + c * MAP_CELL + w / 2, z: -half + r * MAP_CELL + d / 2, w, d, h: TILES[ch].h, color: TILES[ch].color });
     }
   }
-  return { halfSize: half, boxes, spawnPoints, dummySpot, ...rest };
+  return { halfSize: half, boxes, spawnPoints, ...rest };
 }
 
 export const MAPS = {
@@ -128,7 +126,7 @@ export const MAPS = {
     '#..x.#########.....XX.....#########....#',
     '#....#########............#########.x..#',
     '#....#########.........x..#########....#',
-    '#....#########......T.....#########....#',
+    '#....#########............#########....#',
     '#....#########...x......s.#########....#',
     '#....#########............#########....#',
     '#....############......############....#',
@@ -173,7 +171,6 @@ export const MAPS = {
       { x: -26, z: -26 }, { x: 26, z: 26 }, { x: -26, z: 26 }, { x: 26, z: -26 },
       { x: 0, z: -27 }, { x: 0, z: 27 }, { x: -27, z: 0 }, { x: 27, z: 0 },
     ],
-    dummySpot: { x: 0, z: 10 },
   },
 };
 

@@ -89,12 +89,6 @@ function sanitizeUsername(name) {
   return clean || `Player${Math.floor(Math.random() * 1000)}`;
 }
 
-// Temporary target for solo testing: every room gets a stationary "Dummy" that can be shot, grants tier
-// upgrades like a real kill, and respawns in place. Disable with TEST_DUMMY=0.
-const TEST_DUMMY = process.env.TEST_DUMMY !== '0';
-const DUMMY_ID = 'dummy';
-const DUMMY_SPOT = MAP.dummySpot ?? MAP.spawnPoints[0];
-
 function newPlayer(id, username, now) {
   return {
     id, username,
@@ -111,11 +105,9 @@ export class Room {
     this.players = new Map(); // socketId -> player
     this.matchActive = true;
     this.restartTimer = null;
-    if (TEST_DUMMY) this.addDummy();
   }
 
-  // Human players only; the test dummy doesn't keep a room alive or take a slot.
-  get size() { return this.players.size - (this.players.has(DUMMY_ID) ? 1 : 0); }
+  get size() { return this.players.size; }
   emit(event, payload) { this.io.to(this.id).emit(event, payload); }
 
   serialize(p) {
@@ -144,14 +136,6 @@ export class Room {
   placeAt(p, spawn, now) {
     Object.assign(p, { x: spawn.x, y: 0, z: spawn.z, ry: Math.atan2(spawn.x, spawn.z), rx: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0, airStart: null });
     p.history = [{ t: now, x: p.x, y: p.y, z: p.z }];
-  }
-
-  spawnFor(p) { return p.isDummy ? DUMMY_SPOT : this.pickSpawn(p.id); }
-
-  addDummy(now = Date.now()) {
-    const p = { ...newPlayer(DUMMY_ID, 'Dummy', now), isDummy: true };
-    this.placeAt(p, DUMMY_SPOT, now);
-    this.players.set(p.id, p);
   }
 
   addPlayer(socket, username, now = Date.now()) {
@@ -377,7 +361,7 @@ export class Room {
     p.health = MAX_HEALTH;
     p.alive = true;
     this.refillAmmo(p);
-    this.placeAt(p, this.spawnFor(p), now);
+    this.placeAt(p, this.pickSpawn(p.id), now);
     this.emit(EVENTS.PLAYER_RESPAWN, { id: p.id, x: p.x, y: p.y, z: p.z });
   }
 
@@ -396,7 +380,7 @@ export class Room {
       this.refillAmmo(p);
     }
     for (const p of this.players.values()) {
-      this.placeAt(p, this.spawnFor(p), now);
+      this.placeAt(p, this.pickSpawn(p.id), now);
       p.alive = true;
     }
     this.matchActive = true;

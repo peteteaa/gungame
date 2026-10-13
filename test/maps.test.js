@@ -7,11 +7,10 @@ const overlaps = (a, b) => a.min.x < b.max.x && a.max.x > b.min.x && a.min.y < b
   && a.min.z < b.max.z && a.max.z > b.min.z;
 
 for (const [id, map] of Object.entries(MAPS)) {
-  test(`${id}: spawn points and the dummy spot are open, in-bounds ground`, () => {
+  test(`${id}: spawn points are open, in-bounds ground`, () => {
     const colliders = mapColliders(map);
-    const points = [...map.spawnPoints, ...(map.dummySpot ? [map.dummySpot] : [])];
     assert.ok(map.spawnPoints.length >= 8, 'enough spawn points to spread a full room');
-    for (const p of points) {
+    for (const p of map.spawnPoints) {
       const box = playerAABB({ x: p.x, y: 0, z: p.z });
       assert.ok(Math.abs(p.x) <= map.halfSize - PLAYER.radius && Math.abs(p.z) <= map.halfSize - PLAYER.radius, `(${p.x}, ${p.z}) out of bounds`);
       assert.ok(!colliders.some((c) => overlaps(box, c)), `(${p.x}, ${p.z}) is inside a solid`);
