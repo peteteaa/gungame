@@ -55,12 +55,25 @@ wall occlusion, magazines and reloads, spoofed origins, lag compensation, knife 
 
 ## Deploy
 
-**Server (Railway, Render or Fly.io):** start command `npm start`; set `CLIENT_ORIGIN` to your Vercel URL.
-`GET /health` returns `{ ok, rooms, players }` for health checks. It must be a long-running process
-(the 30 Hz tick loop and room state live in memory), so use a single instance.
+The game server runs on **Render** and the client on **Vercel**. The server must be one long-running process
+(the 30 Hz tick loop and room state live in memory), so it can't be a serverless function.
 
-**Client (Vercel):** `vercel.json` builds with `npm run build` and serves `client/dist`.
-Set `VITE_SERVER_URL` to the server URL in the Vercel project's environment variables.
+**Server (Render):** `render.yaml` is a Blueprint. In the Render dashboard choose **New → Blueprint**, pick this repo,
+and it creates `webgun-server` (build `npm ci && npm run build`, start `npm start`, health check `GET /health`).
+It also serves the built client, so its `https://….onrender.com` URL is playable on its own.
+On the free plan the service sleeps after ~15 minutes idle and takes about a minute to wake on the next visit.
+
+**Client (Vercel):** `vercel.json` builds with `npm run build` and serves `client/dist`. The server URL is baked in
+at build time, so set it before deploying:
+
+```bash
+vercel link
+vercel env add VITE_SERVER_URL production   # paste the Render URL
+vercel deploy --prod
+```
+
+Then set `CLIENT_ORIGIN` on Render to the Vercel URL and the Render URL, comma-separated.
+Deploy both from the same commit: a client whose map/weapon settings differ from the server's reloads itself.
 
 ## Maps
 

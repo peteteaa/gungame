@@ -1,0 +1,19 @@
+# Render Blueprint: the authoritative game server (Socket.io + 30 Hz tick loop). It also serves the built client,
+# so the Render URL is playable on its own; the Vercel deployment points at it via VITE_SERVER_URL.
+# Room state lives in memory, so keep exactly one instance.
+services:
+  - type: web
+    name: webgun-server
+    runtime: node
+    plan: free
+    numInstances: 1
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      # Comma-separated allowed client origins, e.g. https://gungame.vercel.app,https://webgun-server.onrender.com
+      - key: CLIENT_ORIGIN
+        sync: false
