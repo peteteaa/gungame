@@ -107,6 +107,7 @@ export function createViewmodel(camera, effects) {
   let swap = null; // { t, swapped }
   let kick = 0;
   let stab = 0;
+  let reload = null; // { t, ms }
   let bobT = 0;
 
   function mount(group) {
@@ -137,6 +138,9 @@ export function createViewmodel(camera, effects) {
     if (tier === FINAL_TIER) stab = 1; else kick = 1;
   }
 
+  function startReload(ms) { reload = { t: 0, ms }; }
+  function cancelReload() { reload = null; }
+
   function update(dt, moving) {
     kick = Math.max(0, kick - dt * 8);
     stab = Math.max(0, stab - dt * 4);
@@ -149,6 +153,14 @@ export function createViewmodel(camera, effects) {
       drop = k * 0.35;
       if (swap.t >= SWAP_MS * 2) swap = null;
     }
+    let tilt = 0;
+    if (reload) {
+      reload.t += dt * 1000;
+      const k = Math.sin(Math.min(1, reload.t / reload.ms) * Math.PI); // dip down and tilt, then back up
+      drop = Math.max(drop, k * 0.18);
+      tilt = k * 0.6;
+      if (reload.t >= reload.ms) reload = null;
+    }
     const bobAmt = moving ? 1 : 0;
     const stabK = Math.sin(stab * Math.PI);
     holder.position.set(
@@ -157,6 +169,7 @@ export function createViewmodel(camera, effects) {
       base.z + kick * 0.06 - stabK * 0.25,
     );
     holder.rotation.x = kick * 0.12 + stabK * 0.5;
+    holder.rotation.z = tilt;
     holder.rotation.y = stabK * 0.4;
   }
 
@@ -164,7 +177,7 @@ export function createViewmodel(camera, effects) {
     return current.userData.muzzle.getWorldPosition(target);
   }
 
-  return { setTier, fire, update, muzzleWorld, get tier() { return tier; } };
+  return { setTier, fire, startReload, cancelReload, update, muzzleWorld, get tier() { return tier; } };
 }
 
 // ---- Remote players ----

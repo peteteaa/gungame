@@ -7,7 +7,7 @@ const SENSITIVITY = 0.0022;
 const EPS = 1e-4;
 
 // Pointer lock, keyboard/mouse input and client-side movement prediction against the static map.
-export function createControls(canvas, camera, { onLockChange, onScoreboard }) {
+export function createControls(canvas, camera, { onLockChange, onScoreboard, onReload }) {
   const colliders = mapColliders();
   const pos = { x: 0, y: 0, z: 0 }; // feet
   const vel = { x: 0, y: 0, z: 0 };
@@ -48,6 +48,7 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard }) {
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Tab') { e.preventDefault(); onScoreboard(true); return; }
     if (e.code === 'Space') e.preventDefault();
+    if (e.code === 'KeyR' && !e.repeat && isLocked()) onReload();
     keys.add(e.code);
   });
   window.addEventListener('keyup', (e) => {

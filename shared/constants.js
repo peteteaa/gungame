@@ -22,12 +22,13 @@ export const PLAYER = {
 };
 
 // fireRate = minimum ms between shots. damage = total damage per shot (split across pellets).
+// magSize = rounds per magazine (0 = melee, never reloads). reloadMs = time to refill the magazine.
 export const WEAPON_TIERS = [
-  { tier: 1, name: 'Pistol', model: 'models/pistol.glb', fireRate: 400, damage: 35, range: 80, pellets: 1, spread: 0.0, auto: false, color: 0x555555 },
-  { tier: 2, name: 'Shotgun', model: 'models/shotgun.glb', fireRate: 800, damage: 90, range: 25, pellets: 6, spread: 0.08, auto: false, color: 0x7a4a24 },
-  { tier: 3, name: 'Assault Rifle', model: 'models/rifle.glb', fireRate: 100, damage: 25, range: 100, pellets: 1, spread: 0.01, auto: true, color: 0x3d4a2f },
-  { tier: 4, name: 'Sniper', model: 'models/sniper.glb', fireRate: 1500, damage: 100, range: 200, pellets: 1, spread: 0.0, auto: false, color: 0x1f2a36 },
-  { tier: 5, name: 'Combat Knife', model: 'models/knife.glb', fireRate: 300, damage: 100, range: 2.5, pellets: 1, spread: 0.0, auto: false, color: 0xb0b0b0 }, // Winning tier
+  { tier: 1, name: 'Pistol', model: 'models/pistol.glb', fireRate: 400, damage: 35, range: 80, pellets: 1, spread: 0.0, auto: false, magSize: 8, reloadMs: 1200, color: 0x555555 },
+  { tier: 2, name: 'Shotgun', model: 'models/shotgun.glb', fireRate: 800, damage: 90, range: 25, pellets: 6, spread: 0.08, auto: false, magSize: 4, reloadMs: 1800, color: 0x7a4a24 },
+  { tier: 3, name: 'Assault Rifle', model: 'models/rifle.glb', fireRate: 100, damage: 25, range: 100, pellets: 1, spread: 0.01, auto: true, magSize: 30, reloadMs: 1800, color: 0x3d4a2f },
+  { tier: 4, name: 'Sniper', model: 'models/sniper.glb', fireRate: 1500, damage: 100, range: 200, pellets: 1, spread: 0.0, auto: false, magSize: 5, reloadMs: 2200, color: 0x1f2a36 },
+  { tier: 5, name: 'Combat Knife', model: 'models/knife.glb', fireRate: 300, damage: 100, range: 2.5, pellets: 1, spread: 0.0, auto: false, magSize: 0, reloadMs: 0, color: 0xb0b0b0 }, // Winning tier
 ];
 export const FINAL_TIER = WEAPON_TIERS.length;
 export const getWeapon = (tier) => WEAPON_TIERS[Math.min(Math.max(tier, 1), FINAL_TIER) - 1];
@@ -66,6 +67,7 @@ export const EVENTS = {
   PLAYER_MOVE: 'playerMove', // { x, y, z, ry, rx }
   FIRE_BULLET: 'fireBullet', // { origin: {x,y,z}, direction: {x,y,z}, time }  time = client's estimate of server clock
   PING: 'clientPing', // (clientTime, ack) -> ack(serverTime)
+  RELOAD: 'reload', // (no payload) start reloading the current weapon
   // server -> client
   JOINED: 'joined', // { id, roomId, player, players, serverTime }
   STATE_UPDATE: 'stateUpdate', // { players: { [id]: {id, username, x,y,z, ry, rx, tier, health, alive, kills} }, serverTime }
@@ -79,6 +81,7 @@ export const EVENTS = {
   PLAYER_LEFT: 'playerLeft', // { id }
   MATCH_OVER: 'matchOver', // { winnerId, username, restartIn }
   MATCH_RESTART: 'matchRestart', // { players }
+  AMMO: 'ammo', // { ammo, reloading, reloadMs }  sent only to the owner when their magazine state changes
 };
 
 // Ray vs axis-aligned box (slab method). Returns distance t >= 0 along the (normalized) dir, or null.

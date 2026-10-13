@@ -36,6 +36,7 @@ const controls = createControls(renderer.domElement, camera, {
     hud.setResume(joined && !locked);
   },
   onScoreboard: (on) => hud.setScoreboardVisible(on && joined),
+  onReload: () => joined && startReload(),
 });
 scene.add(controls.rig);
 const viewmodel = createViewmodel(camera, effects);
@@ -48,6 +49,8 @@ let me = null; // own state from the latest snapshot / join
 let tier = 1;
 let alive = true;
 let lastFireAt = 0;
+let ammo = getWeapon(1).magSize; // predicted locally; the server is authoritative and syncs via EVENTS.AMMO
+let reloadEndsAt = 0; // performance.now() time the local reload finishes, 0 when not reloading
 let lastMoveSent = 0;
 let lastBoardAt = 0;
 const remotes = new Map(); // id -> { mesh, setTier, setPitch, dispose }
@@ -62,6 +65,29 @@ function applyOwnState(state) {
   hud.setHealth(state.health);
   hud.setWeapon(tier);
   hud.setDead(!alive);
+}
+
+const showAmmo = () => hud.setAmmo(ammo, getWeapon(tier).magSize, reloadEndsAt > 0);
+
+function refillAmmo() {
+  ammo = getWeapon(tier).magSize;
+  reloadEndsAt = 0;
+  viewmodel.cancelReload();
+  showAmmo();
+}
+
+// Always tells the server, even for the automatic reload on empty, so its magazine can't drift from ours.
+function startReload() {
+  const weapon = getWeapon(tier);
+  if (!alive || !weapon.magSize || reloadEndsAt || ammo >= weapon.magSize) return;
+  beginLocalReload(weapon.reloadMs);
+  net.emitReload();
+}
+
+function beginLocalReload(ms) {
+  reloadEndsAt = performance.now() + ms;
+  viewmodel.startReload(ms);
+  showAmmo();
 }
 
 function resetRemotes() {
@@ -92,6 +118,7 @@ net.on(EVENTS.JOINED, (data) => {
   controls.teleport(p.x, p.y, p.z);
   controls.yaw = p.ry || 0;
   applyOwnState(p);
+  refillAmmo();
   hud.enterGame();
   hud.hideBanner();
   hud.setResume(!controls.isLocked());
@@ -107,6 +134,7 @@ net.on(EVENTS.PLAYER_RESPAWN, (d) => {
   if (d.id !== myId) return;
   controls.teleport(d.x, d.y, d.z);
   alive = true;
+  refillAmmo();
   hud.setDead(false);
 });
 
@@ -132,6 +160,7 @@ net.on(EVENTS.TIER_UPGRADE, (d) => {
   if (d.id !== myId) return;
   tier = d.newTier;
   hud.setWeapon(tier);
+  refillAmmo();
   hud.toast(`UPGRADE: ${getWeapon(tier).name}`);
 });
 
@@ -150,6 +179,21 @@ net.on(EVENTS.MATCH_RESTART, (d) => {
   if (!mine) return;
   controls.teleport(mine.x, mine.y, mine.z);
   applyOwnState(mine);
+  refillAmmo();
+});
+
+// Server-side magazine changes. Only act on disagreements: a reload the server started that we didn't,
+// or a reload the server finished before our timer did. Otherwise local prediction is already ahead.
+net.on(EVENTS.AMMO, (d) => {
+  if (d.reloading && !reloadEndsAt) {
+    ammo = d.ammo;
+    beginLocalReload(d.reloadMs);
+  } else if (!d.reloading && reloadEndsAt) {
+    ammo = d.ammo;
+    reloadEndsAt = 0;
+    viewmodel.cancelReload();
+    showAmmo();
+  }
 });
 
 net.on(EVENTS.PLAYER_JOINED, (d) => hud.feed([{ text: `${d.player.username} joined`, cls: 'weapon' }]));
@@ -181,11 +225,16 @@ const tmpDir = new THREE.Vector3();
 function tryFire(now) {
   const weapon = getWeapon(tier);
   if (now - lastFireAt < weapon.fireRate) return;
+  if (weapon.magSize && (reloadEndsAt || ammo <= 0)) return;
   lastFireAt = now;
   camera.getWorldPosition(tmpOrigin);
   camera.getWorldDirection(tmpDir).normalize();
   net.emitFire(tmpOrigin, tmpDir);
   viewmodel.fire();
+  if (weapon.magSize) {
+    ammo--;
+    if (ammo <= 0) startReload(); else showAmmo();
+  }
 }
 
 // ---- Remote players ----
@@ -226,6 +275,7 @@ function frame(now) {
   last = now;
 
   if (joined) {
+    if (reloadEndsAt && now >= reloadEndsAt) refillAmmo();
     controls.update(dt, alive);
     if (alive) {
       viewmodel.setTier(tier);

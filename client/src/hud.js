@@ -9,7 +9,7 @@ export function createHud() {
     hud: $('hud'), start: $('start'), fill: $('health-fill'), hpText: $('health-text'),
     wName: $('weapon-name'), wTier: $('weapon-tier'), feed: $('feed'), toast: $('toast'),
     damage: $('damage'), death: $('death'), banner: $('banner'), bannerTitle: $('banner-title'),
-    bannerSub: $('banner-sub'), disc: $('disconnected'), resume: $('resume'), ping: $('ping'),
+    bannerSub: $('banner-sub'), disc: $('disconnected'), resume: $('resume'), ping: $('ping'), ammo: $('ammo'),
     board: $('scoreboard'),
   };
   let toastTimer = 0;
@@ -37,6 +37,11 @@ export function createHud() {
     setWeapon(tier) {
       el.wName.textContent = getWeapon(tier).name;
       el.wTier.textContent = `Tier ${tier}/${FINAL_TIER} — ${getWeapon(tier).name}`;
+    },
+    setAmmo(ammo, magSize, reloading) {
+      el.ammo.textContent = !magSize ? '' : reloading ? 'RELOADING' : `${ammo} / ${magSize}`;
+      el.ammo.classList.toggle('reloading', reloading);
+      el.ammo.classList.toggle('low', !reloading && magSize > 0 && ammo <= Math.ceil(magSize / 4));
     },
     setPing(ms) { el.ping.textContent = `${Math.round(ms)} ms`; },
     feed(parts) {

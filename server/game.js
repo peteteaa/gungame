@@ -11,13 +11,18 @@ const MOVE_TOLERANCE = 1.5; // multiplier on max speed to absorb network jitter
 const MOVE_BURST = 1.5; // max horizontal distance that can be banked while idle / packets bunch up
 const MAX_FALL_SPEED = 25; // units / second; generous bound on downward speed
 const VERT_SLACK = 0.3; // flat tolerance on vertical checks
-// Highest a jump can rise above the surface it left (v^2 / 2g), plus slack.
-const MAX_CLIMB = (PLAYER.jumpVelocity ** 2) / (2 * PLAYER.gravity) + VERT_SLACK;
+// Seconds of packet-timing jitter tolerated on the jump arc. Kept small on the way up (VERT_SLACK already
+// covers a few packets of late arrival) so a client snapped to the ground can't instantly re-hop to height.
+const RISE_TIME_SLACK = 0.05;
+const FALL_TIME_SLACK = 0.15;
+const AIR_START_LOOKBACK_MS = 100; // how far before the first airborne move takeoff is assumed to have happened
+const APEX_T = PLAYER.jumpVelocity / PLAYER.gravity;
 const SWEEP_STEP = 0.3; // spacing of collision samples along a move, so thin walls can't be skipped
 const COLLIDE_INSET = 0.05; // shrink colliders slightly so the client's EPS pushes never count as overlap
 const GROUND_EPS = 0.1;
 const MAX_ORIGIN_DRIFT = 2.0; // how far a shot origin may be from the server's view of the shooter's eye
 const FIRE_RATE_TOLERANCE = 0.85; // accept shots slightly early to absorb jitter
+const RELOAD_TOLERANCE_MS = 100; // a shot may finish a reload this early (the client's timer starts before the server's)
 const MAX_Y = Math.max(...MAP.boxes.map((b) => b.h)) + 3;
 
 const isNum = (n) => typeof n === 'number' && Number.isFinite(n);
@@ -51,6 +56,26 @@ function insideSolid(x, y, z) {
   const r = PLAYER.radius - COLLIDE_INSET;
   return COLLIDERS.some((c) => overlapsXZ(x, z, c, r)
     && y < c.max.y - COLLIDE_INSET && y + PLAYER.height > c.min.y + COLLIDE_INSET);
+}
+
+// Height above takeoff of a full-strength jump t seconds in.
+const arc = (t) => PLAYER.jumpVelocity * t - 0.5 * PLAYER.gravity * t * t;
+
+// Highest a player can legitimately be, relative to the surface they left, t seconds after leaving it:
+// the max of the jump arc over [t - fall slack, t + rise slack]. Flat at the apex, then falls with gravity.
+function airCeiling(t) {
+  if (t + RISE_TIME_SLACK <= APEX_T) return arc(t + RISE_TIME_SLACK);
+  if (t - FALL_TIME_SLACK >= APEX_T) return arc(t - FALL_TIME_SLACK);
+  return arc(APEX_T);
+}
+
+// Height of the highest surface under (x, z) at or below y.
+function surfaceBelow(x, y, z) {
+  let top = 0;
+  for (const c of COLLIDERS) {
+    if (c.max.y <= y + GROUND_EPS && c.max.y > top && overlapsXZ(x, z, c, PLAYER.radius)) top = c.max.y;
+  }
+  return top;
 }
 
 // Is the player standing on the ground or on top of a box?
@@ -100,7 +125,7 @@ export class Room {
   }
 
   placeAt(p, spawn, now) {
-    Object.assign(p, { x: spawn.x, y: 0, z: spawn.z, ry: Math.atan2(spawn.x, spawn.z), rx: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0 });
+    Object.assign(p, { x: spawn.x, y: 0, z: spawn.z, ry: Math.atan2(spawn.x, spawn.z), rx: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0, airStart: null });
     p.history = [{ t: now, x: p.x, y: p.y, z: p.z }];
   }
 
@@ -108,8 +133,8 @@ export class Room {
     const p = {
       id: socket.id, username: sanitizeUsername(username),
       x: 0, y: 0, z: 0, ry: 0, rx: 0,
-      tier: 1, health: MAX_HEALTH, alive: true, kills: 0,
-      lastFireAt: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0, history: [], respawnTimer: null,
+      tier: 1, health: MAX_HEALTH, alive: true, kills: 0, ammo: getWeapon(1).magSize, reloadingUntil: 0,
+      lastFireAt: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0, airStart: null, history: [], respawnTimer: null,
     };
     this.placeAt(p, this.pickSpawn(p.id), now);
     this.players.set(p.id, p);
@@ -142,7 +167,8 @@ export class Room {
 
     // Horizontal distance comes out of a budget that refills with elapsed time, so the allowance is
     // per second rather than per message (sending more moves doesn't buy more distance).
-    const dt = clamp((now - p.lastMoveAt) / 1000, 0, 1);
+    const prevMoveAt = p.lastMoveAt;
+    const dt = clamp((now - prevMoveAt) / 1000, 0, 1);
     p.lastMoveAt = now;
     p.moveBudget = Math.min(p.moveBudget + PLAYER.moveSpeed * MOVE_TOLERANCE * dt, MOVE_BURST);
 
@@ -151,15 +177,35 @@ export class Room {
     const lim = MAP.halfSize - PLAYER.radius;
     const inBounds = Math.abs(data.x) <= lim + 0.05 && Math.abs(data.z) <= lim + 0.05 && data.y >= -0.05 && data.y <= MAX_Y;
     const fallOk = p.y - y <= MAX_FALL_SPEED * dt + VERT_SLACK;
-    const climbOk = y <= p.groundY + MAX_CLIMB; // can't rise further above the last surface stood on than a jump allows
+    // Gravity: while airborne, height is capped by the best possible jump arc from the takeoff surface.
+    const airStart = p.airStart ?? Math.max(prevMoveAt, now - AIR_START_LOOKBACK_MS);
+    const gravityOk = y <= p.groundY + airCeiling((now - airStart) / 1000) + VERT_SLACK;
 
-    if (!inBounds || horiz > p.moveBudget || !fallOk || !climbOk || this.sweepHitsSolid(p, data.x, y, data.z, horiz)) {
+    if (!inBounds || horiz > p.moveBudget || !fallOk || !gravityOk || this.sweepHitsSolid(p, data.x, y, data.z, horiz)) {
+      this.applyGravity(p, now); // a hovering client is corrected to where it should have fallen to
       socket.emit(EVENTS.POSITION_CORRECTION, { x: p.x, y: p.y, z: p.z });
       return;
     }
     p.moveBudget -= horiz;
     p.x = data.x; p.y = y; p.z = data.z;
-    if (grounded(p.x, p.y, p.z)) p.groundY = p.y;
+    if (grounded(p.x, p.y, p.z)) {
+      p.groundY = p.y;
+      p.airStart = null;
+    } else {
+      p.airStart = airStart;
+    }
+  }
+
+  // Pull an airborne player down to the gravity ceiling (covers clients that stop sending moves mid-air).
+  applyGravity(p, now) {
+    if (p.airStart === null || !p.alive) return;
+    const ceiling = p.groundY + airCeiling((now - p.airStart) / 1000) + VERT_SLACK;
+    if (p.y <= ceiling) return;
+    p.y = Math.max(surfaceBelow(p.x, p.y, p.z), ceiling);
+    if (grounded(p.x, p.y, p.z)) {
+      p.groundY = p.y;
+      p.airStart = null;
+    }
   }
 
   // Sample the straight path from the current position to the target for solid overlap.
@@ -199,11 +245,14 @@ export class Room {
     if (Math.hypot(o.x - eye.x, o.y - eye.y, o.z - eye.z) > MAX_ORIGIN_DRIFT) return;
     const aim = normalize(data.direction);
     if (!aim) return;
+    if (weapon.magSize && (this.updateReload(shooter, now, RELOAD_TOLERANCE_MS) || shooter.ammo <= 0)) return;
     // Advance by a full interval (not to `now`) so early-arriving shots borrow from the next one;
     // the tolerance absorbs jitter without raising the sustained fire rate.
     shooter.lastFireAt = Math.max(now, shooter.lastFireAt + weapon.fireRate);
 
     // Lag compensation: rewind targets to what the shooter saw (their clock minus interpolation delay).
+    if (weapon.magSize && --shooter.ammo <= 0) this.startReload(shooter, now); // auto-reload on empty
+
     const claimed = isNum(data.time) ? data.time - INTERPOLATION_DELAY_MS : now;
     const shotTime = clamp(claimed, now - MAX_REWIND_MS, now);
     const targets = [...this.players.values()]
@@ -235,6 +284,36 @@ export class Room {
     for (const [target, dmg] of damageByTarget) this.applyDamage(shooter, target, Math.round(dmg), now, weapon);
   }
 
+  sendAmmo(p) {
+    this.io.to(p.id).emit(EVENTS.AMMO, { ammo: p.ammo, reloading: p.reloadingUntil > 0, reloadMs: getWeapon(p.tier).reloadMs });
+  }
+
+  refillAmmo(p) {
+    p.ammo = getWeapon(p.tier).magSize;
+    p.reloadingUntil = 0;
+    this.sendAmmo(p);
+  }
+
+  startReload(p, now) {
+    const weapon = getWeapon(p.tier);
+    if (!p.alive || !weapon.magSize || p.reloadingUntil || p.ammo >= weapon.magSize) return;
+    p.reloadingUntil = now + weapon.reloadMs;
+    this.sendAmmo(p);
+  }
+
+  // Completes a reload whose timer is up (within tolerance). Returns true while the player is still reloading.
+  updateReload(p, now, tolerance = 0) {
+    if (!p.reloadingUntil) return false;
+    if (now < p.reloadingUntil - tolerance) return true;
+    this.refillAmmo(p);
+    return false;
+  }
+
+  handleReload(socket, now = Date.now()) {
+    const p = this.players.get(socket.id);
+    if (p) this.startReload(p, now);
+  }
+
   applyDamage(attacker, target, damage, now, weapon = getWeapon(attacker.tier)) {
     if (!target.alive || !this.matchActive) return;
     target.health = Math.max(0, target.health - damage);
@@ -254,6 +333,7 @@ export class Room {
       return;
     }
     killer.tier++;
+    this.refillAmmo(killer);
     this.emit(EVENTS.TIER_UPGRADE, { id: killer.id, newTier: killer.tier });
     victim.respawnTimer = setTimeout(() => this.respawn(victim), RESPAWN_DELAY_MS);
   }
@@ -263,6 +343,7 @@ export class Room {
     p.respawnTimer = null;
     p.health = MAX_HEALTH;
     p.alive = true;
+    this.refillAmmo(p);
     this.placeAt(p, this.pickSpawn(p.id), now);
     this.emit(EVENTS.PLAYER_RESPAWN, { id: p.id, x: p.x, y: p.y, z: p.z });
   }
@@ -279,6 +360,7 @@ export class Room {
     for (const p of this.players.values()) {
       // alive stays false until placed so unplaced players don't skew pickSpawn distances
       Object.assign(p, { tier: 1, health: MAX_HEALTH, alive: false, kills: 0, lastFireAt: 0, respawnTimer: null });
+      this.refillAmmo(p);
     }
     for (const p of this.players.values()) {
       this.placeAt(p, this.pickSpawn(p.id), now);
@@ -290,6 +372,8 @@ export class Room {
 
   tick(now = Date.now()) {
     for (const p of this.players.values()) {
+      this.updateReload(p, now);
+      this.applyGravity(p, now);
       p.history.push({ t: now, x: p.x, y: p.y, z: p.z });
       while (p.history.length > 1 && now - p.history[0].t > HISTORY_MS) p.history.shift();
     }

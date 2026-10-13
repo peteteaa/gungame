@@ -105,6 +105,7 @@ export function createNetwork() {
     on: (event, fn) => socket.on(event, fn),
     join(name) { username = name; sendJoin(); },
     emitMove: (p) => socket.volatile.emit(EVENTS.PLAYER_MOVE, p),
+    emitReload: () => socket.emit(EVENTS.RELOAD),
     emitFire(origin, direction) {
       socket.emit(EVENTS.FIRE_BULLET, {
         origin: { x: origin.x, y: origin.y, z: origin.z },

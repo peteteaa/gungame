@@ -140,6 +140,71 @@ test('spamming upward moves cannot fly', async () => {
   socket.disconnect();
 });
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const SEND_MS = 33;
+const arc = (t) => PLAYER.jumpVelocity * t - 0.5 * PLAYER.gravity * t * t; // height above takeoff t seconds into a jump
+
+// Sends moves at the client's rate. Returns the corrections received.
+async function sendPath(socket, points) {
+  const corrections = [];
+  const onCorrection = (c) => corrections.push(c);
+  socket.on(EVENTS.POSITION_CORRECTION, onCorrection);
+  for (const pt of points) {
+    socket.emit(EVENTS.PLAYER_MOVE, { ...pt, ry: 0, rx: 0 });
+    await sleep(SEND_MS);
+  }
+  await sleep(50);
+  socket.off(EVENTS.POSITION_CORRECTION, onCorrection);
+  return corrections;
+}
+
+test('a normal running jump is accepted', async () => {
+  const { socket, joined } = await joinPlayer('Jumper');
+  const { p } = place(joined.id, -10, 5, { lastMoveAt: Date.now() });
+  const points = [];
+  for (let t = SEND_MS / 1000; arc(t) > 0; t += SEND_MS / 1000) points.push({ x: -10 + 6 * t, y: arc(t), z: 5 });
+  points.push({ x: points.at(-1).x + 0.2, y: 0, z: 5 });
+  assert.deepEqual(await sendPath(socket, points), []);
+  assert.equal(p.y, 0);
+  socket.disconnect();
+});
+
+test('walking off a tall box falls without corrections', async () => {
+  const { socket, joined } = await joinPlayer('Faller');
+  // corner tower at (22, 22) is 4 tall and spans x 20.5..23.5; start on its west edge
+  const { p } = place(joined.id, 20.4, 22, { y: 4, groundY: 4, lastMoveAt: Date.now() });
+  const points = [];
+  for (let t = SEND_MS / 1000; ; t += SEND_MS / 1000) {
+    const x = 20.4 - 6 * t;
+    const y = Math.max(0, 4 - 0.5 * PLAYER.gravity * (t - 0.02) ** 2);
+    points.push({ x, y, z: 22 });
+    if (y === 0) break;
+  }
+  assert.deepEqual(await sendPath(socket, points), []);
+  assert.equal(p.y, 0);
+  socket.disconnect();
+});
+
+test('hovering in mid-air is pulled back down', async () => {
+  const { socket, joined } = await joinPlayer('Hoverer');
+  const { p } = place(joined.id, -10, 5, { lastMoveAt: Date.now() });
+  const points = [0.2, 0.45, 0.7, 0.9, 1.0].map((y) => ({ x: -10, y, z: 5 }));
+  for (let i = 0; i < 36; i++) points.push({ x: -10, y: 1.0, z: 5 }); // ~1.2s of claimed hovering
+  const corrections = await sendPath(socket, points);
+  assert.ok(corrections.length > 0, 'expected a correction');
+  assert.ok(p.y < 0.5, `server still has the player at y=${p.y.toFixed(2)}`);
+  socket.disconnect();
+});
+
+test('a player who stops sending moves mid-air still falls', async () => {
+  const { socket, joined } = await joinPlayer('Freezer');
+  const { p } = place(joined.id, -10, 5, { lastMoveAt: Date.now() });
+  await sendPath(socket, [0.2, 0.45, 0.7, 0.9, 1.1].map((y) => ({ x: -10, y, z: 5 })));
+  await sleep(1000);
+  assert.equal(p.y, 0);
+  socket.disconnect();
+});
+
 test('moving into a box is rejected', async () => {
   const { socket, joined } = await joinPlayer('Ghost');
   place(joined.id, 0, 2.5, { lastMoveAt: Date.now() - 100 }); // just south of the center box (z <= 2)

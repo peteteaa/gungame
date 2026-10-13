@@ -29,6 +29,7 @@ export function startServer({ port = Number(process.env.PORT) || 3000, clientOri
     socket.on(EVENTS.JOIN_MATCH, (data) => game.join(socket, data?.username));
     socket.on(EVENTS.PLAYER_MOVE, (data) => game.roomOf(socket)?.handleMove(socket, data));
     socket.on(EVENTS.FIRE_BULLET, (data) => game.roomOf(socket)?.handleFire(socket, data));
+    socket.on(EVENTS.RELOAD, () => game.roomOf(socket)?.handleReload(socket));
     socket.on(EVENTS.PING, (_clientTime, ack) => typeof ack === 'function' && ack(Date.now()));
     socket.on('disconnect', () => game.leave(socket));
   });
