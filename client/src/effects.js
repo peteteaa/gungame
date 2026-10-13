@@ -100,7 +100,8 @@ export function createEffects(scene) {
     return { mesh, trigger() { flash.timer = FLASH_MS / 1000; mesh.visible = true; mesh.rotation.z = Math.random() * 3; } };
   }
 
-  function hitMarker() {
+  function hitMarker(headshot = false) {
+    hitEl.classList.toggle('head', headshot);
     hitEl.classList.add('on');
     hitTimer = 0.12;
   }

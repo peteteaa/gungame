@@ -4,7 +4,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { io as connect } from 'socket.io-client';
 import { startServer } from '../server/server.js';
-import { EVENTS, PLAYER, FINAL_TIER, MAX_HEALTH, getWeapon } from '../shared/constants.js';
+import { EVENTS, PLAYER, FINAL_TIER, MAX_HEALTH, WEAPON_TIERS, HEADSHOT_MULTIPLIER, getWeapon } from '../shared/constants.js';
 
 let server;
 let url;
@@ -48,8 +48,9 @@ function place(id, x, z, extra = {}) {
   return { room, p };
 }
 
-const fireAt = (socket, from, dir) => socket.emit(EVENTS.FIRE_BULLET, {
-  origin: { x: from.x, y: PLAYER.eyeHeight, z: from.z }, direction: dir, time: Date.now(),
+const CHEST = 1.1; // below PLAYER.headY, so level shots from here are body shots
+const fireAt = (socket, from, dir, y = CHEST) => socket.emit(EVENTS.FIRE_BULLET, {
+  origin: { x: from.x, y, z: from.z }, direction: dir, time: Date.now(),
 });
 
 test('join assigns a room, sanitizes the name, and streams state updates', async () => {
@@ -99,12 +100,50 @@ test('pistol kills in 3 shots, awards a tier upgrade, then the victim respawns',
   const upgrade = once(b.socket, EVENTS.TIER_UPGRADE);
   const respawn = once(b.socket, EVENTS.PLAYER_RESPAWN, 4000);
   fireAt(a.socket, { x: 10, z: 5 }, { x: 0, y: 0, z: -1 });
-  assert.deepEqual(await killed, { victimId: b.joined.id, killerId: a.joined.id, weapon: 'Pistol' });
+  assert.deepEqual(await killed, { victimId: b.joined.id, killerId: a.joined.id, weapon: 'Pistol', headshot: false });
   assert.deepEqual(await upgrade, { id: a.joined.id, newTier: 2 });
   const r = await respawn;
   assert.equal(r.id, b.joined.id);
   const room = server.game.socketRoom.get(b.joined.id);
   assert.equal(room.players.get(b.joined.id).health, MAX_HEALTH);
+  a.socket.disconnect();
+  b.socket.disconnect();
+});
+
+test('headshots deal bonus damage and are flagged; body shots are not', async () => {
+  const a = await joinPlayer('Headhunter');
+  const b = await joinPlayer('Helmetless');
+  place(a.joined.id, 10, 5);
+  place(b.joined.id, 10, -5);
+  const pistol = getWeapon(1);
+
+  const head = once(a.socket, EVENTS.PLAYER_HIT);
+  fireAt(a.socket, { x: 10, z: 5 }, { x: 0, y: 0, z: -1 }, PLAYER.eyeHeight); // level with the target's head
+  const h = await head;
+  assert.equal(h.headshot, true);
+  assert.equal(h.damage, pistol.damage * HEADSHOT_MULTIPLIER);
+
+  place(a.joined.id, 10, 5); // reset fire cooldown
+  const body = once(a.socket, EVENTS.PLAYER_HIT);
+  const killed = once(a.socket, EVENTS.PLAYER_KILLED);
+  fireAt(a.socket, { x: 10, z: 5 }, { x: 0, y: 0, z: -1 });
+  const bh = await body;
+  assert.equal(bh.headshot, false);
+  assert.equal(bh.damage, pistol.damage);
+  assert.equal((await killed).headshot, false); // the killing blow was a body shot
+  a.socket.disconnect();
+  b.socket.disconnect();
+});
+
+test('the flamethrower gets no headshot bonus', async () => {
+  const tier = WEAPON_TIERS.findIndex((w) => w.name === 'Flamethrower') + 1;
+  const a = await joinPlayer('Torch');
+  const b = await joinPlayer('Kindling');
+  place(a.joined.id, 10, 5, { tier, ammo: getWeapon(tier).magSize });
+  place(b.joined.id, 10, 2);
+  const hit = once(a.socket, EVENTS.PLAYER_HIT);
+  fireAt(a.socket, { x: 10, z: 5 }, { x: 0, y: 0, z: -1 }, PLAYER.eyeHeight);
+  assert.ok((await hit).damage <= getWeapon(tier).damage);
   a.socket.disconnect();
   b.socket.disconnect();
 });

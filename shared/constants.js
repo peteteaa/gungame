@@ -16,6 +16,7 @@ export const PLAYER = {
   radius: 0.4, // half-width of the player's square footprint (AABB)
   height: 1.8, // feet to top of head
   eyeHeight: 1.6, // feet to camera
+  headY: 1.5, // feet to the bottom of the head; hits from here up to `height` are headshots
   moveSpeed: 8, // units / second
   jumpVelocity: 7,
   gravity: 20,
@@ -24,6 +25,7 @@ export const PLAYER = {
 // One kill = one tier up; a kill with the last weapon (the knife) wins the match.
 // fireRate = minimum ms between shots. damage = total damage per shot (split across pellets).
 // magSize = rounds per magazine (0 = melee, never reloads). reloadMs = time to refill the magazine.
+// headshot = damage multiplier for hits on the head (default HEADSHOT_MULTIPLIER).
 // effect: 'flame' draws fire particles instead of tracers. kind picks the procedural fallback model; viewLength = first-person length in meters; model = GLB under client/public.
 const W = (name, kind, model, viewLength, color, stats) => ({ name, kind, model: `models/${model}.glb`, viewLength, color, ...stats });
 export const WEAPON_TIERS = [
@@ -38,10 +40,11 @@ export const WEAPON_TIERS = [
   W('LMG', 'rifle', 'guns/rifle_4', 0.65, 0x333a2a, { fireRate: 90, damage: 22, range: 100, pellets: 1, spread: 0.025, auto: true, magSize: 60, reloadMs: 3200 }),
   W('Marksman Rifle', 'sniper', 'guns/sniper_1', 0.75, 0x283040, { fireRate: 450, damage: 60, range: 160, pellets: 1, spread: 0, auto: false, magSize: 10, reloadMs: 2200 }),
   W('Sniper', 'sniper', 'guns/sniper_2', 0.8, 0x1f2a36, { fireRate: 1500, damage: 100, range: 200, pellets: 1, spread: 0, auto: false, magSize: 5, reloadMs: 2200 }),
-  W('Flamethrower', 'rifle', 'guns/flamethrower', 0.55, 0x8a3b12, { fireRate: 70, damage: 10, range: 9, pellets: 3, spread: 0.12, auto: true, magSize: 50, reloadMs: 2500, effect: 'flame' }),
-  W('Combat Knife', 'knife', 'knife', 0.35, 0xb0b0b0, { fireRate: 300, damage: 100, range: 2.5, pellets: 1, spread: 0, auto: false, magSize: 0, reloadMs: 0 }), // winning tier
+  W('Flamethrower', 'rifle', 'guns/flamethrower', 0.55, 0x8a3b12, { fireRate: 70, damage: 10, range: 9, pellets: 3, spread: 0.12, auto: true, magSize: 50, reloadMs: 2500, effect: 'flame', headshot: 1 }),
+  W('Combat Knife', 'knife', 'knife', 0.35, 0xd4af37, { fireRate: 300, damage: 100, range: 2.5, pellets: 1, spread: 0, auto: false, magSize: 0, reloadMs: 0 }), // winning tier
 ].map((w, i) => ({ tier: i + 1, ...w }));
 export const FINAL_TIER = WEAPON_TIERS.length;
+export const HEADSHOT_MULTIPLIER = 2;
 export const getWeapon = (tier) => WEAPON_TIERS[Math.min(Math.max(tier, 1), FINAL_TIER) - 1];
 
 // ---- Maps ----
@@ -191,8 +194,8 @@ export const EVENTS = {
   STATE_UPDATE: 'stateUpdate', // { players: { [id]: {id, username, x,y,z, ry, rx, tier, health, alive, kills} }, serverTime }
   TIER_UPGRADE: 'tierUpgrade', // { id, newTier }
   SHOT_FIRED: 'shotFired', // { id, tier, origin, ends: [{x,y,z}] }  for tracers
-  PLAYER_HIT: 'playerHit', // { targetId, attackerId, health, damage }
-  PLAYER_KILLED: 'playerKilled', // { victimId, killerId, weapon }
+  PLAYER_HIT: 'playerHit', // { targetId, attackerId, health, damage, headshot }
+  PLAYER_KILLED: 'playerKilled', // { victimId, killerId, weapon, headshot }
   PLAYER_RESPAWN: 'playerRespawn', // { id, x, y, z }
   POSITION_CORRECTION: 'positionCorrection', // { x, y, z }  server rejected a move; snap here
   PLAYER_JOINED: 'playerJoined', // { player }

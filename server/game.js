@@ -2,7 +2,7 @@
 import {
   EVENTS, MAX_PLAYERS_PER_ROOM, MAX_HEALTH, RESPAWN_DELAY_MS, MATCH_RESTART_DELAY_MS,
   INTERPOLATION_DELAY_MS, MAX_REWIND_MS, PLAYER, MAP, FINAL_TIER, getWeapon,
-  rayAABB, mapColliders, playerAABB, CONTRACT_VERSION,
+  rayAABB, mapColliders, playerAABB, HEADSHOT_MULTIPLIER, CONTRACT_VERSION,
 } from '../shared/constants.js';
 
 const COLLIDERS = mapColliders();
@@ -282,7 +282,8 @@ export class Room {
       .map((p) => ({ p, box: playerAABB(this.positionAt(p, shotTime)) }));
 
     const origin = { x: o.x, y: o.y, z: o.z };
-    const damageByTarget = new Map();
+    const headshotMultiplier = weapon.headshot ?? HEADSHOT_MULTIPLIER;
+    const damageByTarget = new Map(); // player -> { damage, headshot }
     const ends = [];
     for (let i = 0; i < weapon.pellets; i++) {
       const dir = applySpread(aim, weapon.spread);
@@ -296,14 +297,24 @@ export class Room {
       let hit = null;
       for (const tgt of targets) {
         const t = rayAABB(origin, dir, tgt.box.min, tgt.box.max);
-        if (t !== null && t <= maxT) { maxT = t; hit = tgt.p; }
+        if (t !== null && t <= maxT) { maxT = t; hit = tgt; }
       }
-      if (hit) damageByTarget.set(hit, (damageByTarget.get(hit) ?? 0) + weapon.damage / weapon.pellets);
+      if (hit) {
+        // Headshot if the ray meets the (rewound) hitbox at head height.
+        const head = origin.y + dir.y * maxT >= hit.box.min.y + PLAYER.headY;
+        const prev = damageByTarget.get(hit.p) ?? { damage: 0, headshot: false };
+        damageByTarget.set(hit.p, {
+          damage: prev.damage + (weapon.damage / weapon.pellets) * (head ? headshotMultiplier : 1),
+          headshot: prev.headshot || head,
+        });
+      }
       ends.push({ x: origin.x + dir.x * maxT, y: origin.y + dir.y * maxT, z: origin.z + dir.z * maxT });
     }
 
     this.emit(EVENTS.SHOT_FIRED, { id: shooter.id, tier: shooter.tier, origin, ends });
-    for (const [target, dmg] of damageByTarget) this.applyDamage(shooter, target, Math.round(dmg), now, weapon);
+    for (const [target, { damage, headshot }] of damageByTarget) {
+      this.applyDamage(shooter, target, Math.round(damage), now, weapon, headshot);
+    }
   }
 
   sendAmmo(p) {
@@ -336,19 +347,19 @@ export class Room {
     if (p) this.startReload(p, now);
   }
 
-  applyDamage(attacker, target, damage, now, weapon = getWeapon(attacker.tier)) {
+  applyDamage(attacker, target, damage, now, weapon = getWeapon(attacker.tier), headshot = false) {
     if (!target.alive || !this.matchActive) return;
     target.health = Math.max(0, target.health - damage);
-    this.emit(EVENTS.PLAYER_HIT, { targetId: target.id, attackerId: attacker.id, health: target.health, damage });
-    if (target.health <= 0) this.handleKill(attacker, target, now, weapon);
+    this.emit(EVENTS.PLAYER_HIT, { targetId: target.id, attackerId: attacker.id, health: target.health, damage, headshot });
+    if (target.health <= 0) this.handleKill(attacker, target, now, weapon, headshot);
   }
 
   // weapon = what actually landed the kill (a shotgun multi-kill upgrades the killer mid-blast).
-  handleKill(killer, victim, now, weapon = getWeapon(killer.tier)) {
+  handleKill(killer, victim, now, weapon = getWeapon(killer.tier), headshot = false) {
     victim.alive = false;
     victim.health = 0;
     killer.kills++;
-    this.emit(EVENTS.PLAYER_KILLED, { victimId: victim.id, killerId: killer.id, weapon: weapon.name });
+    this.emit(EVENTS.PLAYER_KILLED, { victimId: victim.id, killerId: killer.id, weapon: weapon.name, headshot });
 
     if (killer.tier >= FINAL_TIER) {
       this.endMatch(killer);

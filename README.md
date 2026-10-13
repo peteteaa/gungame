@@ -37,6 +37,7 @@ between snapshots. The server never trusts the client for outcomes:
 | Ammo and reloads: magazine counts and reload timers live on the server; empty or reloading guns can't fire; a kill upgrade or respawn refills | `startReload` / `updateReload` |
 | Shot origin must be within 2 units of the shooter's server-side eye position | `Room.handleFire` |
 | Hit detection: ray vs. player hitboxes, occluded by map geometry, limited by weapon range | `Room.handleFire` |
+| Headshots (2× damage, per-weapon `headshot` override): decided from where the ray meets the rewound hitbox, not claimed by the client | `Room.handleFire` |
 | Shotgun spread is rolled server-side (clients can't send perfectly tight pellets) | `applySpread` |
 | Lag compensation: targets rewound up to 300 ms using per-tick position history | `Room.positionAt` |
 | Damage, deaths, tier upgrades, respawns, match win/restart | `applyDamage` / `handleKill` |

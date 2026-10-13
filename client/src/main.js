@@ -152,7 +152,7 @@ net.on(EVENTS.PLAYER_HIT, (d) => {
     hud.flashDamage();
     hud.setHealth(d.health);
   }
-  if (d.attackerId === myId) effects.hitMarker();
+  if (d.attackerId === myId) effects.hitMarker(d.headshot);
 });
 
 net.on(EVENTS.PLAYER_KILLED, (d) => {
@@ -160,6 +160,7 @@ net.on(EVENTS.PLAYER_KILLED, (d) => {
   hud.feed([
     { text: nameOf(d.killerId), cls: `killer ${self(d.killerId)}` },
     { text: `[${d.weapon}]`, cls: 'weapon' },
+    ...(d.headshot ? [{ text: 'HEADSHOT', cls: 'headshot' }] : []),
     { text: nameOf(d.victimId), cls: `victim ${self(d.victimId)}` },
   ]);
   if (d.victimId === myId) { alive = false; hud.setDead(true); }

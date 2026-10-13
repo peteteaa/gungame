@@ -11,9 +11,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d12; col
 #crosshair::after { top: 10px; left: 0; height: 2px; width: 22px; }
 #hitmarker { position: absolute; inset: -6px; opacity: 0; transition: opacity 0.12s; }
 #hitmarker::before, #hitmarker::after { content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 34px;
-  background: #ff4b4b; box-shadow: 0 0 0 1px #000; transform: translate(-50%, -50%) rotate(45deg); }
+  background: #fff; box-shadow: 0 0 0 1px #000; transform: translate(-50%, -50%) rotate(45deg); }
 #hitmarker::after { transform: translate(-50%, -50%) rotate(-45deg); }
 #hitmarker.on { opacity: 1; transition: none; }
+#hitmarker.head::before, #hitmarker.head::after { background: #ff3b3b; height: 46px; } /* headshot */
 
 #health { position: absolute; left: 24px; bottom: 24px; width: 280px; }
 #health-bar { height: 22px; background: #1a1d26; border: 3px solid #000; outline: 2px solid #3a4052; }
@@ -33,6 +34,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d12; col
 .feed-item { background: rgba(10, 12, 18, 0.7); border-left: 3px solid #ffcf4a; padding: 4px 10px; font-size: 15px; }
 .feed-item .killer { color: #6cc4ff; } .feed-item .victim { color: #ff7a7a; } .feed-item .weapon { color: #ffcf4a; }
 .feed-item .self { text-decoration: underline; }
+.feed-item .headshot { color: #ff5a5a; font-weight: bold; font-size: 12px; letter-spacing: 1px; }
 
 #toast { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font-size: 34px; font-weight: bold; color: #ffcf4a;
   opacity: 0; transition: opacity 0.4s; letter-spacing: 2px; }

@@ -4,9 +4,13 @@ import { PLAYER, getWeapon, FINAL_TIER } from '../../shared/constants.js';
 
 const DARK = 0x22252c;
 const mat = (color) => new THREE.MeshLambertMaterial({ color, flatShading: true });
+// Polished metal for the gold knife: specular highlights plus a little glow so it reads even in shadow.
+const metal = (color) => new THREE.MeshPhongMaterial({
+  color, specular: 0xfff1b8, shininess: 90, emissive: new THREE.Color(color).multiplyScalar(0.18), flatShading: true,
+});
 
-function box(group, w, h, l, x, y, z, color, rx = 0) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), mat(color));
+function box(group, w, h, l, x, y, z, color, rx = 0) { // color may also be a Material
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), color.isMaterial ? color : mat(color));
   m.position.set(x, y, z);
   m.rotation.x = rx;
   group.add(m);
@@ -53,10 +57,16 @@ function buildProceduralGun(weapon) {
       box(g, 0.05, 0.09, 0.25, 0, -0.01, 0.35, c);
       muzzleZ = -0.8;
       break;
-    default:
+    default: { // gold knife
+      const gold = metal(c);
       box(g, 0.035, 0.035, 0.14, 0, 0, 0.05, DARK); // handle
-      box(g, 0.012, 0.05, 0.28, 0, 0.01, -0.16, c); // blade
+      box(g, 0.04, 0.04, 0.02, 0, 0, 0.13, gold); // pommel
+      box(g, 0.075, 0.016, 0.022, 0, 0.005, -0.03, gold); // guard
+      box(g, 0.012, 0.05, 0.28, 0, 0.01, -0.18, gold); // blade
+      box(g, 0.006, 0.03, 0.06, 0, 0.022, -0.34, gold, 0.6); // tip
       muzzleZ = -0.3;
+      break;
+    }
   }
   const muzzle = new THREE.Object3D();
   muzzle.position.set(0, 0.01, muzzleZ);
