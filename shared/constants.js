@@ -40,15 +40,22 @@ const W = (name, kind, model, viewLength, color, stats) => ({ name, kind, model:
 export const WEAPON_TIERS = [
   W('Pistol', 'pistol', 'guns/pistol_1', 0.28, 0x555555, { fireRate: 400, damage: 35, range: 80, pellets: 1, spread: 0, auto: false, magSize: 8, reloadMs: 1200 }),
   W('Heavy Pistol', 'pistol', 'guns/pistol_6', 0.3, 0x4a4f57, { fireRate: 550, damage: 50, range: 70, pellets: 1, spread: 0.005, auto: false, magSize: 6, reloadMs: 1400 }),
+  W('Auto Pistol', 'pistol', 'guns/pistol_2', 0.28, 0x50545c, { fireRate: 110, damage: 16, range: 45, pellets: 1, spread: 0.035, auto: true, magSize: 18, reloadMs: 1300 }),
   W('SMG', 'rifle', 'guns/smg_2', 0.5, 0x3b3f46, { fireRate: 80, damage: 18, range: 50, pellets: 1, spread: 0.03, auto: true, magSize: 25, reloadMs: 1500, ads: 1.4 }),
   W('Shotgun', 'shotgun', 'guns/shotgun_2', 0.6, 0x7a4a24, { fireRate: 800, damage: 90, range: 25, pellets: 6, spread: 0.08, auto: false, magSize: 4, reloadMs: 1800 }),
+  W('Heavy SMG', 'rifle', 'guns/smg_3', 0.48, 0x353a33, { fireRate: 105, damage: 24, range: 60, pellets: 1, spread: 0.025, auto: true, magSize: 30, reloadMs: 1900 }),
   W('Machine Pistol', 'rifle', 'guns/smg_5', 0.45, 0x2f3a2f, { fireRate: 60, damage: 14, range: 35, pellets: 1, spread: 0.045, auto: true, magSize: 20, reloadMs: 1300, ads: 1.3 }),
+  W('Carbine', 'rifle', 'guns/rifle_1', 0.55, 0x3a4036, { fireRate: 140, damage: 34, range: 110, pellets: 1, spread: 0.008, auto: false, magSize: 20, reloadMs: 1700, ads: 1.8 }),
   W('Assault Rifle', 'rifle', 'guns/rifle_6', 0.6, 0x3d4a2f, { fireRate: 100, damage: 25, range: 100, pellets: 1, spread: 0.01, auto: true, magSize: 30, reloadMs: 1800, ads: 1.6 }),
   W('Auto Shotgun', 'shotgun', 'guns/shotgun_1', 0.6, 0x5a3a20, { fireRate: 350, damage: 72, range: 18, pellets: 6, spread: 0.1, auto: true, magSize: 8, reloadMs: 2200 }),
+  W('Long Rifle', 'sniper', 'guns/rifle_3', 0.72, 0x4a3a2a, { fireRate: 350, damage: 55, range: 150, pellets: 1, spread: 0.002, auto: false, magSize: 8, reloadMs: 2100 }),
   W('Battle Rifle', 'rifle', 'guns/rifle_7', 0.65, 0x2e3440, { fireRate: 220, damage: 40, range: 120, pellets: 1, spread: 0.006, auto: false, magSize: 20, reloadMs: 2000, ads: 2 }),
   W('LMG', 'rifle', 'guns/rifle_4', 0.65, 0x333a2a, { fireRate: 90, damage: 22, range: 100, pellets: 1, spread: 0.025, auto: true, magSize: 60, reloadMs: 3200, ads: 1.6 }),
+  W('Tactical Rifle', 'rifle', 'guns/rifle_2', 0.58, 0x2c3238, { fireRate: 85, damage: 21, range: 100, pellets: 1, spread: 0.015, auto: true, magSize: 32, reloadMs: 2000, ads: 1.7 }),
   W('Marksman Rifle', 'sniper', 'guns/sniper_1', 0.75, 0x283040, { fireRate: 450, damage: 60, range: 160, pellets: 1, spread: 0, auto: false, magSize: 10, reloadMs: 2200, ads: 3.5 }),
+  W('Anti-Materiel Rifle', 'sniper', 'guns/sniper_0', 0.85, 0x30352c, { fireRate: 2000, damage: 120, range: 250, pellets: 1, spread: 0, auto: false, magSize: 3, reloadMs: 3200, ads: 8 }),
   W('Sniper', 'sniper', 'guns/sniper_2', 0.8, 0x1f2a36, { fireRate: 1500, damage: 100, range: 200, pellets: 1, spread: 0, auto: false, magSize: 5, reloadMs: 2200, ads: 6 }),
+  W('Hand Cannon', 'pistol', 'guns/pistol_5', 0.36, 0x3d3a36, { fireRate: 550, damage: 55, range: 90, pellets: 1, spread: 0.003, auto: false, magSize: 6, reloadMs: 1800, ads: 2 }),
   W('Flamethrower', 'rifle', 'guns/flamethrower', 0.55, 0x8a3b12, { fireRate: 70, damage: 10, range: 9, pellets: 3, spread: 0.12, auto: true, magSize: 50, reloadMs: 2500, effect: 'flame', headshot: 1, burn: { dps: 12, durationMs: 2500 }, ads: 1.25 }),
   W('Combat Knife', 'knife', 'knife', 0.35, 0xd4af37, { fireRate: 300, damage: 100, range: 2.5, pellets: 1, spread: 0, auto: false, magSize: 0, reloadMs: 0 }), // winning tier
 ].map((w, i) => ({ tier: i + 1, ...w }));

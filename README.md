@@ -1,8 +1,9 @@
 # WebGun
 
-Browser-based low-poly multiplayer **Gun Game** FPS. Every kill moves you up a 13-weapon ladder
-(Pistol → Heavy Pistol → SMG → Shotgun → Machine Pistol → Assault Rifle → Auto Shotgun → Battle Rifle →
-LMG → Marksman Rifle → Sniper → Flamethrower → Combat Knife); the first kill with the knife wins the match.
+Browser-based low-poly multiplayer **Gun Game** FPS. Every kill moves you up a 20-weapon ladder
+(Pistol → Heavy Pistol → Auto Pistol → SMG → Shotgun → Heavy SMG → Machine Pistol → Carbine → Assault Rifle →
+Auto Shotgun → Long Rifle → Battle Rifle → LMG → Tactical Rifle → Marksman Rifle → Anti-Materiel Rifle → Sniper →
+Hand Cannon → Flamethrower → Combat Knife); the first kill with the knife wins the match.
 Weapon stats, order and models all live in `WEAPON_TIERS` in `shared/constants.js`.
 
 - **Client:** Three.js + Vite (vanilla ES modules), served from Vercel.
