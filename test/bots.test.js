@@ -63,5 +63,9 @@ test('bots hunt down and kill a human standing still, without walking into walls
   assert.equal(human.alive, false, 'a bot killed the human');
   const kill = io.events.find((e) => e.event === EVENTS.PLAYER_KILLED && e.payload.victimId === 'h1');
   assert.ok(kill.payload.killerId.startsWith('bot_'));
+  const taunt = io.events.find((e) => e.event === EVENTS.CHAT_MESSAGE && e.payload.id === kill.payload.killerId);
+  assert.ok(taunt, 'the killer says something in chat');
+  assert.equal(taunt.payload.bot, true);
+  assert.ok(taunt.payload.text.length > 0);
   room.destroy();
 });

@@ -24,7 +24,9 @@ Or build once and let the server host everything on one port: `npm run build && 
 
 ## Controls
 
-Click to lock the mouse · WASD move · Shift sprint · Ctrl or C crouch · Space jump · Left click fire (hold for automatics) · Q aim down sights (scoped guns) · R reload · Tab scoreboard
+Click to lock the mouse · WASD move · Shift sprint · Ctrl or C crouch · Space jump · Left click fire (hold for automatics) · Q aim down sights (scoped guns) · R reload · Tab scoreboard · T chat
+
+Chat goes to everyone in your room (Enter sends, Esc cancels; up to 120 characters, rate-limited on the server).
 
 ## Server authority
 
@@ -55,7 +57,7 @@ human who joins after that replaces one bot (two humans: two bots, three: one, f
 as humans leave. They run on the server (`server/bots.js`): they walk a grid path
 to the nearest enemy, only shoot at what they can see, react after 350–700 ms, aim with a capped turn rate and some
 wobble, and fire through the same checks as humans (`Room.fireFrom`). They climb the weapon ladder and can win a
-match. Set `BOTS` on the server to change how many join a lone human (`BOTS=0` turns them off).
+match, and every bot kill comes with a taunt in chat. Set `BOTS` on the server to change how many join a lone human (`BOTS=0` turns them off).
 
 ## Tests
 

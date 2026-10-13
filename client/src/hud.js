@@ -11,6 +11,7 @@ export function createHud() {
     damage: $('damage'), death: $('death'), banner: $('banner'), bannerTitle: $('banner-title'),
     bannerSub: $('banner-sub'), disc: $('disconnected'), resume: $('resume'), ping: $('ping'), ammo: $('ammo'),
     board: $('scoreboard'), crosshair: $('crosshair'), scope: $('scope'), reddot: $('reddot'), burn: $('burn'),
+    chat: $('chat'), chatLog: $('chat-log'), chatInput: $('chat-input'),
   };
   let toastTimer = 0;
   let damageTimer = 0;
@@ -64,6 +65,31 @@ export function createHud() {
       while (el.feed.children.length > 6) el.feed.firstChild.remove();
       setTimeout(() => item.remove(), 5000);
     },
+    // Chat lines fade out after a while; opening the input brings the recent history back.
+    chatLine(username, text, { bot = false, self = false } = {}) {
+      const line = document.createElement('div');
+      line.className = `chat-line${bot ? ' bot' : ''}${self ? ' self' : ''}`;
+      const name = document.createElement('span');
+      name.className = 'name';
+      name.textContent = `${username}: `;
+      line.append(name, text);
+      el.chatLog.append(line);
+      while (el.chatLog.children.length > 8) el.chatLog.firstChild.remove();
+      setTimeout(() => line.classList.add('old'), 10000);
+    },
+    get chatOpen() { return !el.chatInput.classList.contains('hidden'); },
+    openChat() {
+      el.chatInput.value = '';
+      show(el.chatInput, true);
+      el.chat.classList.add('open');
+      el.chatInput.focus();
+    },
+    closeChat() {
+      show(el.chatInput, false);
+      el.chat.classList.remove('open');
+      el.chatInput.blur();
+    },
+    get chatInput() { return el.chatInput; },
     toast(text) {
       el.toast.textContent = text;
       pulse(el.toast, 'on', 1800, toastRef);

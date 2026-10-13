@@ -5,6 +5,37 @@ import { PLAYER, MAP, INTERPOLATION_DELAY_MS, getWeapon, rayAABB, mapColliders }
 
 export const BOT_NAMES = ['Ava', 'Kai', 'Milo', 'Nova', 'Rex', 'Zed', 'Ivy'];
 
+// What a bot says in chat after a kill. {victim} and {weapon} are filled in.
+const TAUNTS = [
+  'gg {victim}, I was aiming at the wall',
+  '{victim} I am literally a for loop',
+  'sorry {victim}, my aim is set to "yes"',
+  'beep boop, {victim} has been deleted',
+  '{victim} did you try turning your aim on and off again?',
+  'that {weapon} goes hard',
+  'calculated. (I cannot calculate)',
+  '{victim} lagged. definitely lag. not skill',
+  'my creator would be proud. or concerned',
+  '{victim} respawn and try again, I believe in you',
+  'error 404: {victim} not found',
+  'I run at 30 ticks a second and still outplayed you {victim}',
+  'tell the Dummy I said hi, {victim}',
+  'is this what humans call "fun"?',
+  '{victim}, I was programmed in 15 minutes',
+  'uninstalling your hitbox, {victim}',
+];
+const HEADSHOT_TAUNTS = [
+  'HEADSHOT. {victim} your head is a hitbox, did you know?',
+  'right between the pixels, {victim}',
+  '{victim}, nice hat. was',
+];
+const pickLine = (list) => list[Math.floor(Math.random() * list.length)];
+
+export function botTaunt(victim, weapon, headshot = false) {
+  const line = headshot && Math.random() < 0.5 ? pickLine(HEADSHOT_TAUNTS) : pickLine(TAUNTS);
+  return line.replaceAll('{victim}', victim).replaceAll('{weapon}', weapon);
+}
+
 const COLLIDERS = mapColliders();
 const CELL = 1; // nav grid resolution in meters; map tiles are 2m, so every corridor has walkable cells
 const N = Math.ceil((MAP.halfSize * 2) / CELL);

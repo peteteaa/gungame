@@ -205,6 +205,7 @@ export const EVENTS = {
   FIRE_BULLET: 'fireBullet', // { origin: {x,y,z}, direction: {x,y,z}, time }  time = client's estimate of server clock
   PING: 'clientPing', // (clientTime, ack) -> ack(serverTime)
   RELOAD: 'reload', // (no payload) start reloading the current weapon
+  CHAT_SEND: 'chatSend', // { text }
   // server -> client
   JOINED: 'joined', // { id, roomId, player, players, serverTime }
   STATE_UPDATE: 'stateUpdate', // { players: { [id]: {id, username, x,y,z, ry, rx, tier, health, alive, kills, burning, crouch} }, serverTime }
@@ -219,7 +220,11 @@ export const EVENTS = {
   MATCH_OVER: 'matchOver', // { winnerId, username, restartIn }
   MATCH_RESTART: 'matchRestart', // { players }
   AMMO: 'ammo', // { ammo, reloading, reloadMs }  sent only to the owner when their magazine state changes
+  CHAT_MESSAGE: 'chatMessage', // { id, username, text, bot }  to everyone in the room
 };
+
+// Room chat: messages are trimmed to maxLength; a player can send at most one per minIntervalMs.
+export const CHAT = { maxLength: 120, minIntervalMs: 700 };
 
 // Ray vs axis-aligned box (slab method). Returns distance t >= 0 along the (normalized) dir, or null.
 export function rayAABB(origin, dir, min, max) {

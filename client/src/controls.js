@@ -55,6 +55,7 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
   });
   window.addEventListener('mouseup', (e) => { if (e.button === 0) mouseDown = false; });
   window.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement) return; // typing in chat or the name box isn't movement
     if (e.code === 'Tab') { e.preventDefault(); onScoreboard(true); return; }
     if (e.code === 'Space' || (e.ctrlKey && isLocked())) e.preventDefault(); // blocks what it can (not Ctrl+W)
     if (e.code === 'KeyR' && !e.repeat && isLocked()) onReload();

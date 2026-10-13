@@ -217,6 +217,8 @@ net.on(EVENTS.AMMO, (d) => {
   }
 });
 
+net.on(EVENTS.CHAT_MESSAGE, (m) => hud.chatLine(m.username, m.text, { bot: m.bot, self: m.id === myId }));
+
 net.on(EVENTS.PLAYER_JOINED, (d) => hud.feed([{ text: `${d.player.username} joined`, cls: 'weapon' }]));
 net.on(EVENTS.PLAYER_LEFT, (d) => {
   hud.feed([{ text: `${nameOf(d.id)} left`, cls: 'weapon' }]);
@@ -235,6 +237,23 @@ const nameInput = document.getElementById('username');
 document.getElementById('play').addEventListener('click', () => startGame(nameInput.value));
 nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') startGame(nameInput.value); });
 document.getElementById('resume').addEventListener('click', () => controls.requestLock());
+
+// ---- Chat ----
+// T opens the chat box (the mouse stays locked, so you can keep looking around); Enter sends, Esc cancels.
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyT' || !joined || hud.chatOpen || e.target instanceof HTMLInputElement) return;
+  e.preventDefault(); // or the T lands in the box
+  hud.openChat();
+});
+hud.chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const text = hud.chatInput.value.trim();
+    if (text) net.emitChat(text);
+    hud.closeChat();
+  } else if (e.key === 'Escape') {
+    hud.closeChat();
+  }
+});
 
 // ---- Shader warm-up ----
 // The first time a material variant is drawn, WebGL compiles its shader and stalls that frame (a 100ms+

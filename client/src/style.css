@@ -82,3 +82,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d12; col
 #play { margin-top: 6px; padding: 12px 56px; font-size: 22px; font-weight: bold; cursor: pointer; font-family: inherit;
   color: #111; background: #ffcf4a; border: 3px solid #000; box-shadow: 0 5px 0 #8a6b12; }
 #play:active { transform: translateY(3px); box-shadow: 0 2px 0 #8a6b12; }
+
+#chat { position: absolute; left: 24px; bottom: 104px; width: 440px; display: flex; flex-direction: column; gap: 4px; }
+#chat-log { display: flex; flex-direction: column; gap: 3px; }
+.chat-line { align-self: flex-start; max-width: 100%; background: rgba(10, 12, 18, 0.6); padding: 3px 8px; font-size: 15px;
+  overflow-wrap: anywhere; transition: opacity 0.8s; }
+.chat-line.old { opacity: 0; }
+#chat.open .chat-line.old { opacity: 1; transition: none; } /* history comes back while typing */
+.chat-line .name { color: #6cc4ff; font-weight: bold; }
+.chat-line.bot .name { color: #ffcf4a; }
+.chat-line.self .name { color: #46d36a; }
+#chat-input { pointer-events: auto; user-select: text; font: inherit; font-size: 15px; padding: 6px 8px; color: #e8ecf2;
+  background: rgba(10, 12, 18, 0.85); border: 2px solid #3a4052; outline: none; text-shadow: none; }

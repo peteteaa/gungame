@@ -4,7 +4,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { io as connect } from 'socket.io-client';
 import { startServer } from '../server/server.js';
-import { EVENTS, PLAYER, FINAL_TIER, MAX_HEALTH, HEALTH_REGEN, WEAPON_TIERS, HEADSHOT_MULTIPLIER, getWeapon } from '../shared/constants.js';
+import { EVENTS, PLAYER, FINAL_TIER, MAX_HEALTH, HEALTH_REGEN, WEAPON_TIERS, HEADSHOT_MULTIPLIER, CHAT, getWeapon } from '../shared/constants.js';
 
 let server;
 let url;
@@ -522,6 +522,24 @@ test('a kill upgrade refills the new weapon and cancels a reload', async () => {
   await upgrade;
   assert.equal(p.ammo, getWeapon(2).magSize);
   assert.equal(p.reloadingUntil, 0);
+  a.socket.disconnect();
+  b.socket.disconnect();
+});
+
+test('chat reaches everyone in the room, cleaned up, capped in length and rate-limited', async () => {
+  const a = await joinPlayer('Talker');
+  const b = await joinPlayer('Listener');
+  const heard = once(b.socket, EVENTS.CHAT_MESSAGE);
+  a.socket.emit(EVENTS.CHAT_SEND, { text: `  hi\u0007 there ${'x'.repeat(200)}  ` });
+  const msg = await heard;
+  assert.equal(msg.id, a.joined.id);
+  assert.equal(msg.username, 'Talker');
+  assert.equal(msg.bot, false);
+  assert.equal(msg.text, `hi there ${'x'.repeat(200)}`.slice(0, CHAT.maxLength));
+  a.socket.emit(EVENTS.CHAT_SEND, { text: 'too soon' }); // inside the rate limit: dropped
+  a.socket.emit(EVENTS.CHAT_SEND, { text: '   ' });
+  a.socket.emit(EVENTS.CHAT_SEND, { text: 42 });
+  assert.ok(await silent(b.socket, EVENTS.CHAT_MESSAGE, 300));
   a.socket.disconnect();
   b.socket.disconnect();
 });

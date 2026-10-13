@@ -2,9 +2,9 @@
 import {
   EVENTS, MAX_PLAYERS_PER_ROOM, MAX_HEALTH, HEALTH_REGEN, RESPAWN_DELAY_MS, MATCH_RESTART_DELAY_MS,
   INTERPOLATION_DELAY_MS, MAX_REWIND_MS, PLAYER, MAP, FINAL_TIER, getWeapon,
-  rayAABB, mapColliders, playerAABB, HEADSHOT_MULTIPLIER, CONTRACT_VERSION,
+  rayAABB, mapColliders, playerAABB, HEADSHOT_MULTIPLIER, CONTRACT_VERSION, CHAT,
 } from '../shared/constants.js';
-import { BOT_NAMES, updateBot } from './bots.js';
+import { BOT_NAMES, botTaunt, updateBot } from './bots.js';
 
 const COLLIDERS = mapColliders();
 const HISTORY_MS = 1000; // position history kept per player for lag compensation
@@ -394,6 +394,20 @@ export class Room {
     if (p) this.startReload(p, now);
   }
 
+  // Room chat from a human: control characters stripped, trimmed, capped in length and rate-limited per player.
+  handleChat(socket, data, now = Date.now()) {
+    const p = this.players.get(socket.id);
+    if (!p || typeof data?.text !== 'string' || now - (p.lastChatAt ?? 0) < CHAT.minIntervalMs) return;
+    const text = data.text.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, CHAT.maxLength);
+    if (!text) return;
+    p.lastChatAt = now;
+    this.say(p, text);
+  }
+
+  say(p, text) {
+    this.emit(EVENTS.CHAT_MESSAGE, { id: p.id, username: p.username, text, bot: !!p.isBot });
+  }
+
   canDamage(attacker, target) {
     if (!target.alive || !this.matchActive) return false;
     return !(target.isDummy && attacker.username.toLowerCase() !== DUMMY_KILLER);
@@ -432,6 +446,7 @@ export class Room {
     victim.burn = null;
     killer.kills++;
     this.emit(EVENTS.PLAYER_KILLED, { victimId: victim.id, killerId: killer.id, weapon: weapon.name, headshot });
+    if (killer.isBot) this.say(killer, botTaunt(victim.username, weapon.name, headshot));
 
     // A burn can outlive the killer's flamethrower (they already moved up): it still kills, but only a kill with
     // the weapon they're holding upgrades them, so a stray burn can't skip a tier or win without the knife.
