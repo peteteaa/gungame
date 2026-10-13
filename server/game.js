@@ -201,9 +201,11 @@ export class Room {
     if (p.airStart === null || !p.alive) return;
     const ceiling = p.groundY + airCeiling((now - p.airStart) / 1000) + VERT_SLACK;
     if (p.y <= ceiling) return;
-    p.y = Math.max(surfaceBelow(p.x, p.y, p.z), ceiling);
-    if (grounded(p.x, p.y, p.z)) {
-      p.groundY = p.y;
+    const floor = surfaceBelow(p.x, p.y, p.z);
+    p.y = Math.max(floor, ceiling);
+    if (p.y - floor <= GROUND_EPS) { // landed
+      p.y = floor;
+      p.groundY = floor;
       p.airStart = null;
     }
   }
