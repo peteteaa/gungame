@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { PLAYER, getWeapon, FINAL_TIER } from '../../shared/constants.js';
+import { PLAYER, WEAPON_TIERS, getWeapon, FINAL_TIER } from '../../shared/constants.js';
 
 const DARK = 0x22252c;
 const mat = (color) => new THREE.MeshLambertMaterial({ color, flatShading: true });
@@ -115,6 +115,15 @@ function buildProceduralGun(weapon) {
 // GLB models are optional: cache the attempt per URL; failures resolve to null.
 const loader = new GLTFLoader();
 const modelCache = new Map();
+// Fetch and parse every weapon model up front; resolves to one fitted model (or null) for shader warm-up.
+export function preloadModels() {
+  return Promise.all(WEAPON_TIERS.map(loadModel))
+    .then((scenes) => {
+      const i = scenes.findIndex(Boolean);
+      return i < 0 ? null : fitModel(scenes[i], WEAPON_TIERS[i]);
+    });
+}
+
 function loadModel(weapon) {
   if (!modelCache.has(weapon.model)) {
     modelCache.set(weapon.model, loader.loadAsync(`/${weapon.model}`).then((gltf) => {

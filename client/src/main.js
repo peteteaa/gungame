@@ -4,7 +4,7 @@ import { createNetwork, lerpAngle } from './network.js';
 import { createControls } from './controls.js';
 import { buildWorld } from './world.js';
 import { createEffects } from './effects.js';
-import { createViewmodel, createRemotePlayer } from './weapons.js';
+import { createViewmodel, createRemotePlayer, preloadModels } from './weapons.js';
 import { createHud } from './hud.js';
 
 const MOVE_SEND_MS = 1000 / 30;
@@ -16,6 +16,8 @@ const BURN_PUFF_MS = 70;
 // ---- Renderer / scene ----
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.shadowMap.enabled = false;
+// Reading shader logs forces a synchronous compile on first use; keep error checks for development only.
+renderer.debug.checkShaderErrors = !import.meta.env.PROD;
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.getElementById('app').appendChild(renderer.domElement);
@@ -231,6 +233,41 @@ const nameInput = document.getElementById('username');
 document.getElementById('play').addEventListener('click', () => startGame(nameInput.value));
 nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') startGame(nameInput.value); });
 document.getElementById('resume').addEventListener('click', () => controls.requestLock());
+
+// ---- Shader warm-up ----
+// The first time a material variant is drawn, WebGL compiles its shader and stalls that frame (a 100ms+
+// hitch when another player joined: face texture, name tag, gun materials). Compile everything up front,
+// while the start screen is up, from stand-ins parked under the map.
+async function warmUp() {
+  const group = new THREE.Group();
+  group.position.y = -50;
+  scene.add(group);
+  const standIn = createRemotePlayer({ id: 'warmup', username: 'warmup' });
+  standIn.setTier(FINAL_TIER); // procedural gold knife
+  group.add(standIn.mesh);
+  const gun = await preloadModels(); // also caches every weapon model
+  if (gun) group.add(gun);
+  const below = { x: 0, y: -50, z: 0 };
+  effects.tracer(below, { x: 0, y: -50, z: -1 });
+  effects.flame(below, { x: 0, y: -50, z: -1 });
+  effects.update(0.001); // makes the flame sprite visible so it compiles
+  try { await renderer.compileAsync(scene, camera); } catch { /* best effort */ }
+  // Some drivers only finish compiling on the first draw, so draw the stand-ins once into a 1px corner of the
+  // canvas (same output settings as real frames, so the same shader variants); the next frame paints over it.
+  const cam = new THREE.PerspectiveCamera(60, 1, 0.1, 20);
+  cam.position.set(0, -49, 3);
+  cam.lookAt(0, -49, 0);
+  const size = renderer.getSize(new THREE.Vector2());
+  renderer.setScissorTest(true);
+  renderer.setScissor(0, 0, 1, 1);
+  renderer.setViewport(0, 0, 1, 1);
+  renderer.render(scene, cam);
+  renderer.setScissorTest(false);
+  renderer.setViewport(0, 0, size.x, size.y);
+  scene.remove(group);
+  standIn.dispose();
+}
+warmUp();
 
 const autojoin = new URLSearchParams(window.location.search).get('autojoin');
 if (autojoin) startGame(autojoin);
