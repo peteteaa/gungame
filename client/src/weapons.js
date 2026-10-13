@@ -254,6 +254,77 @@ export function createViewmodel(camera, effects) {
 
 // ---- Remote players ----
 
+// ---- Faces ----
+// Each player gets a 16x16 pixel-art face, seeded from their id so it's stable for the whole match.
+const SKIN_TONES = ['#ffdbac', '#f1c27d', '#e0ac69', '#c68642', '#a1665e', '#8d5524'];
+const HAIR_COLORS = ['#1c1410', '#3b2414', '#6a4423', '#b5834a', '#e2c178', '#a33a1f', '#d9d9d9', '#2f5fd0'];
+const EYE_COLORS = ['#3b2a1a', '#1f6fb5', '#2f7d3a', '#6b6b6b', '#5a3a1a'];
+const HURT_MS = 350;
+
+function rng(seed) { // mulberry32
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const pick = (rand, list) => list[Math.floor(rand() * list.length)];
+
+// Builds the look, plus 'normal' and 'hurt' face textures that share it.
+function makeFace(id) {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  const rand = rng(h);
+  const look = {
+    skin: pick(rand, SKIN_TONES), hair: pick(rand, HAIR_COLORS), eyes: pick(rand, EYE_COLORS),
+    brows: pick(rand, ['flat', 'angry', 'raised']), mouth: pick(rand, ['smile', 'flat', 'smirk', 'grin', 'o']),
+    freckles: rand() < 0.2, beard: rand() < 0.2, shades: rand() < 0.12,
+  };
+
+  function draw(hurt) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 16;
+    const g = c.getContext('2d');
+    const px = (x, y, w = 1, hh = 1, color) => { g.fillStyle = color; g.fillRect(x, y, w, hh); };
+    px(0, 0, 16, 16, look.skin);
+    px(0, 0, 16, 2, look.hair); // fringe
+    const dark = '#1a1a1a';
+    // Brows
+    if (look.brows === 'flat') { px(3, 4, 3, 1, look.hair); px(10, 4, 3, 1, look.hair); }
+    if (look.brows === 'angry') { px(3, 3, 1, 1, look.hair); px(4, 4, 2, 1, look.hair); px(12, 3, 1, 1, look.hair); px(10, 4, 2, 1, look.hair); }
+    if (look.brows === 'raised') { px(3, 3, 3, 1, look.hair); px(10, 3, 3, 1, look.hair); }
+    // Eyes
+    if (hurt) { // squeezed shut: > <
+      px(3, 6, 1, 1, dark); px(4, 7, 1, 1, dark); px(3, 8, 1, 1, dark);
+      px(12, 6, 1, 1, dark); px(11, 7, 1, 1, dark); px(12, 8, 1, 1, dark);
+    } else if (look.shades) {
+      px(2, 6, 12, 2, dark); px(3, 6, 1, 1, '#555'); px(10, 6, 1, 1, '#555');
+    } else {
+      px(3, 6, 3, 2, '#fff'); px(10, 6, 3, 2, '#fff');
+      px(4, 6, 2, 2, look.eyes); px(11, 6, 2, 2, look.eyes);
+      px(5, 6, 1, 1, dark); px(12, 6, 1, 1, dark);
+    }
+    if (look.freckles) for (const [x, y] of [[3, 9], [5, 10], [11, 9], [13, 10]]) px(x, y, 1, 1, '#b07a4f');
+    // Mouth
+    const lip = '#5a2a22';
+    if (hurt) { px(6, 11, 4, 3, lip); px(7, 12, 2, 1, '#2a0f0c'); } // grimace
+    else if (look.mouth === 'smile') { px(5, 11, 1, 1, lip); px(6, 12, 4, 1, lip); px(10, 11, 1, 1, lip); }
+    else if (look.mouth === 'flat') px(6, 12, 4, 1, lip);
+    else if (look.mouth === 'smirk') { px(6, 12, 3, 1, lip); px(9, 11, 2, 1, lip); }
+    else if (look.mouth === 'grin') { px(5, 11, 6, 2, lip); px(6, 11, 4, 1, '#fff'); }
+    else { px(7, 11, 2, 2, lip); } // o
+    if (look.beard) { px(2, 12, 12, 4, look.hair); px(5, 12, 6, 1, look.skin); px(6, 12, 4, 1, hurt ? lip : look.skin); }
+    const tex = new THREE.CanvasTexture(c);
+    tex.magFilter = tex.minFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+  return { look, normal: draw(false), hurt: draw(true) };
+}
+
 function hashColor(id) {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
@@ -298,11 +369,17 @@ export function createRemotePlayer(state) {
   const upper = new THREE.Group(); // torso, head, arms and gun; bobs with each step
   root.add(upper);
   box(upper, 0.55, 0.7, 0.3, 0, 1.15, 0, color);
+  const face = makeFace(state.id);
+  const skin = face.look.skin;
   const head = new THREE.Group();
   head.position.y = 1.65;
-  box(head, 0.3, 0.3, 0.3, 0, 0, 0, SKIN);
-  box(head, 0.24, 0.07, 0.04, 0, 0.03, -0.15, 0x111111); // visor shows facing
+  const skinMat = mat(skin);
+  const hairMat = mat(face.look.hair);
+  const faceMat = new THREE.MeshLambertMaterial({ map: face.normal });
+  // BoxGeometry face order: +x, -x, +y, -y, +z, -z. Hair on top and back, face on the front (-z).
+  head.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), [skinMat, skinMat, hairMat, skinMat, hairMat, faceMat]));
   upper.add(head);
+  let hurtTimer = 0;
   const held = new THREE.Group(); // current weapon, mounted at the trigger hand
   held.position.copy(GUN_MOUNT);
   upper.add(held);
@@ -336,7 +413,7 @@ export function createRemotePlayer(state) {
     const handL = support ? support.clone().add(GUN_MOUNT) : new THREE.Vector3(-0.4, 0.9, 0.02);
     for (const [shoulder, hand] of [[shoulderR, handR], [shoulderL, handL]]) {
       limb(arms, shoulder, hand, 0.14, color);
-      box(arms, 0.12, 0.12, 0.12, hand.x, hand.y, hand.z, SKIN);
+      box(arms, 0.12, 0.12, 0.12, hand.x, hand.y, hand.z, skin);
     }
     upper.add(arms);
   }
@@ -349,6 +426,7 @@ export function createRemotePlayer(state) {
   let crouchK = 0; // 0 = standing, 1 = crouched (kneel: one leg forward, one back, body lowered)
   function animate(dt, crouched = false) {
     if (dt <= 0) return;
+    if (hurtTimer > 0 && (hurtTimer -= dt * 1000) <= 0) { faceMat.map = face.normal; faceMat.needsUpdate = true; }
     crouchK += ((crouched ? 1 : 0) - crouchK) * Math.min(1, dt * 12);
     const speed = havePos ? Math.hypot(root.position.x - lastPos.x, root.position.z - lastPos.z) / dt : 0;
     lastPos.copy(root.position);
@@ -379,9 +457,17 @@ export function createRemotePlayer(state) {
       });
     },
     setPitch(rx) { head.rotation.x = rx; },
+    // Pained expression for a moment after being hit.
+    hurt() {
+      hurtTimer = HURT_MS;
+      faceMat.map = face.hurt;
+      faceMat.needsUpdate = true;
+    },
     dispose() {
       disposed = true;
       disposeTree(root);
+      face.normal.dispose();
+      face.hurt.dispose();
     },
   };
 }

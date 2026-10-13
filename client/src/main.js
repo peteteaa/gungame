@@ -158,6 +158,7 @@ net.on(EVENTS.PLAYER_HIT, (d) => {
     hud.setHealth(d.health);
   }
   if (d.attackerId === myId && !d.burn) effects.hitMarker(d.headshot); // no marker spam from burn ticks
+  remotes.get(d.targetId)?.hurt();
 });
 
 net.on(EVENTS.PLAYER_KILLED, (d) => {
