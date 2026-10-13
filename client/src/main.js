@@ -254,7 +254,7 @@ function tryFire(now) {
 }
 
 // ---- Remote players ----
-function updateRemotes() {
+function updateRemotes(dt) {
   const players = net.latest();
   if (!players) return;
   for (const id of remotes.keys()) if (!players[id]) removeRemote(id);
@@ -279,6 +279,7 @@ function updateRemotes() {
     }
     r.setTier(state.tier);
     r.setPitch(pose.rx);
+    r.animate(dt);
     r.mesh.visible = state.alive !== false;
     if (state.burning && r.mesh.visible && performance.now() >= (r.nextPuffAt ?? 0)) {
       r.nextPuffAt = performance.now() + BURN_PUFF_MS;
@@ -320,7 +321,7 @@ function frame(now) {
     } else {
       controls.consumePress();
     }
-    updateRemotes();
+    updateRemotes(dt);
     if (now - lastBoardAt > 250 && net.latest()) {
       lastBoardAt = now;
       hud.setPing(net.pingMs);

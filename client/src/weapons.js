@@ -25,6 +25,43 @@ function barrel(group, radius, length, z, y, color) {
   return m;
 }
 
+const SKIN = 0xe0b890;
+const SLEEVE = 0x2b3445;
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
+
+// Box of the given thickness stretched between two points (in the group's space).
+function limb(group, from, to, thick, color) {
+  const dir = new THREE.Vector3().subVectors(to, from);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(thick, thick, dir.length()), color.isMaterial ? color : mat(color));
+  m.position.copy(from).add(to).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(Z_AXIS, dir.normalize());
+  group.add(m);
+  return m;
+}
+
+// Where the hands go on a weapon, in its mount space (origin = trigger hand, barrel down -Z).
+// Returns { grip, support } with support null for one-handed weapons.
+function handPoints(weapon) {
+  const v = (x, y, z) => new THREE.Vector3(x, y, z);
+  if (weapon.kind === 'knife') return { grip: v(0, 0, 0.05), support: null };
+  if (weapon.kind === 'pistol') return { grip: v(0, -0.06, 0.01), support: v(-0.03, -0.08, 0.03) };
+  return { grip: v(0, -0.06, 0.01), support: v(0, -0.05, -weapon.viewLength * 0.38) };
+}
+
+// First-person hands and sleeves holding the weapon; forearms run off the bottom of the screen.
+function buildHands(weapon) {
+  const g = new THREE.Group();
+  const v = (x, y, z) => new THREE.Vector3(x, y, z);
+  const { grip, support } = handPoints(weapon);
+  box(g, 0.05, 0.07, 0.09, grip.x, grip.y, grip.z, SKIN);
+  limb(g, v(grip.x + 0.01, grip.y - 0.02, grip.z + 0.05), v(0.12, -0.32, 0.45), 0.07, SLEEVE);
+  if (support) {
+    box(g, 0.05, 0.06, 0.09, support.x, support.y, support.z, SKIN);
+    limb(g, v(support.x - 0.01, support.y - 0.02, support.z + 0.05), v(-0.3, -0.34, 0.42), 0.07, SLEEVE);
+  }
+  return g;
+}
+
 // Procedural low-poly gun pointing down -Z. userData.muzzle marks the barrel tip.
 function buildProceduralGun(weapon) {
   const g = new THREE.Group();
@@ -139,9 +176,10 @@ export function createViewmodel(camera, effects) {
   let bobT = 0;
   let sprintK = 0; // 0 = aiming, 1 = gun lowered for sprinting
 
-  function mount(group) {
+  function mount(group, weapon) {
     if (current) holder.remove(current);
     current = group;
+    group.add(buildHands(weapon));
     holder.add(group);
     group.userData.muzzle.add(flash.mesh);
   }
@@ -149,9 +187,9 @@ export function createViewmodel(camera, effects) {
   function showTier(t) {
     tier = t;
     const weapon = getWeapon(t);
-    mount(buildProceduralGun(weapon));
+    mount(buildProceduralGun(weapon), weapon);
     loadModel(weapon).then((scene) => {
-      if (scene && tier === t) mount(fitModel(scene, weapon));
+      if (scene && tier === t) mount(fitModel(scene, weapon), weapon);
     });
   }
 
@@ -238,54 +276,104 @@ function labelSprite(text) {
   return sprite;
 }
 
-// Humanoid built from boxes; origin at the feet, facing -Z at ry = 0.
+const STRIDE_RAD_PER_UNIT = 2.4; // leg phase advanced per unit walked (one full cycle ~ two steps)
+const MAX_LEG_SWING = 0.8; // radians at full sprint
+const GUN_MOUNT = new THREE.Vector3(0.26, 1.16, -0.32); // trigger hand, chest height in front of the body
+
+// Humanoid built from boxes; origin at the feet, facing -Z at ry = 0. Legs swing with ground speed
+// (animate), arms reach forward to hold the current weapon.
 export function createRemotePlayer(state) {
   const root = new THREE.Group();
   const color = hashColor(state.id);
   const dark = color.clone().multiplyScalar(0.55);
-  box(root, 0.22, 0.8, 0.25, -0.12, 0.4, 0, dark);
-  box(root, 0.22, 0.8, 0.25, 0.12, 0.4, 0, dark);
-  box(root, 0.55, 0.7, 0.3, 0, 1.15, 0, color);
-  box(root, 0.15, 0.6, 0.15, -0.37, 1.2, 0, color);
-  box(root, 0.15, 0.6, 0.15, 0.37, 1.2, 0, color);
+  const legs = [-0.12, 0.12].map((x) => {
+    const hip = new THREE.Group(); // pivot at the hip so the leg swings from the top
+    hip.position.set(x, 0.8, 0);
+    box(hip, 0.22, 0.8, 0.25, 0, -0.4, 0, dark);
+    root.add(hip);
+    return hip;
+  });
+  const upper = new THREE.Group(); // torso, head, arms and gun; bobs with each step
+  root.add(upper);
+  box(upper, 0.55, 0.7, 0.3, 0, 1.15, 0, color);
   const head = new THREE.Group();
   head.position.y = 1.65;
-  box(head, 0.3, 0.3, 0.3, 0, 0, 0, 0xe0b890);
+  box(head, 0.3, 0.3, 0.3, 0, 0, 0, SKIN);
   box(head, 0.24, 0.07, 0.04, 0, 0.03, -0.15, 0x111111); // visor shows facing
-  root.add(head);
-  const hand = new THREE.Group(); // held weapon: box placeholder until the tier's model loads
-  hand.position.set(0.3, 1.2, -0.2);
-  root.add(hand);
-  const weaponBox = box(hand, 0.06, 0.08, 0.5, 0, 0, -0.1, 0x555555);
-  let gunModel = null;
+  upper.add(head);
+  const held = new THREE.Group(); // current weapon, mounted at the trigger hand
+  held.position.copy(GUN_MOUNT);
+  upper.add(held);
+  let gun = null;
+  let arms = null;
   root.add(labelSprite(state.username || 'player'));
   let tier = 0;
   let disposed = false;
 
+  const disposeTree = (obj) => obj.traverse((o) => {
+    if (o.userData.shared) return; // gun models share GPU resources with the load cache
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+  });
+
+  function setGun(group) {
+    if (gun) { held.remove(gun); disposeTree(gun); }
+    gun = group;
+    held.add(gun);
+  }
+
+  // Arms stretch from the shoulders to the hand points on this weapon (or hang, for a free hand).
+  function buildArms(weapon) {
+    if (arms) { upper.remove(arms); disposeTree(arms); }
+    arms = new THREE.Group();
+    const { grip, support } = handPoints(weapon);
+    const shoulderR = new THREE.Vector3(0.34, 1.42, 0);
+    const shoulderL = new THREE.Vector3(-0.34, 1.42, 0);
+    const handR = grip.clone().add(GUN_MOUNT);
+    const handL = support ? support.clone().add(GUN_MOUNT) : new THREE.Vector3(-0.4, 0.9, 0.02);
+    for (const [shoulder, hand] of [[shoulderR, handR], [shoulderL, handL]]) {
+      limb(arms, shoulder, hand, 0.14, color);
+      box(arms, 0.12, 0.12, 0.12, hand.x, hand.y, hand.z, SKIN);
+    }
+    upper.add(arms);
+  }
+
+  // Walk cycle, driven by how fast the (interpolated) body is actually moving.
+  const lastPos = new THREE.Vector3();
+  let havePos = false;
+  let phase = 0;
+  let stride = 0; // 0 = standing, 1 = full sprint
+  function animate(dt) {
+    if (dt <= 0) return;
+    const speed = havePos ? Math.hypot(root.position.x - lastPos.x, root.position.z - lastPos.z) / dt : 0;
+    lastPos.copy(root.position);
+    havePos = true;
+    const walking = speed > 0.5 && speed < PLAYER.sprintSpeed * 3; // ignore teleports (respawns)
+    stride += ((walking ? Math.min(1, speed / PLAYER.sprintSpeed) : 0) - stride) * Math.min(1, dt * 10);
+    if (walking) phase += speed * dt * STRIDE_RAD_PER_UNIT;
+    const swing = Math.sin(phase) * MAX_LEG_SWING * stride;
+    legs[0].rotation.x = swing;
+    legs[1].rotation.x = -swing;
+    upper.position.y = Math.abs(Math.cos(phase)) * 0.05 * stride;
+  }
+
   return {
     mesh: root,
+    animate,
     setTier(t) {
       if (t === tier) return;
       tier = t;
       const weapon = getWeapon(t);
-      weaponBox.material.color.setHex(weapon.color);
-      weaponBox.visible = true;
-      if (gunModel) { hand.remove(gunModel); gunModel = null; }
+      setGun(buildProceduralGun(weapon)); // placeholder until the model loads
+      buildArms(weapon);
       loadModel(weapon).then((scene) => {
-        if (!scene || tier !== t || disposed) return;
-        gunModel = fitModel(scene, weapon);
-        hand.add(gunModel);
-        weaponBox.visible = false;
+        if (scene && tier === t && !disposed) setGun(fitModel(scene, weapon));
       });
     },
     setPitch(rx) { head.rotation.x = rx; },
     dispose() {
       disposed = true;
-      root.traverse((o) => {
-        if (o.userData.shared) return; // gun models share GPU resources with the load cache
-        if (o.geometry) o.geometry.dispose();
-        if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
-      });
+      disposeTree(root);
     },
   };
 }
