@@ -74,14 +74,21 @@ function boxColors(b, phys, palette) {
   }
   if (rise > 2.5) { // pillar, low building, facade piece: plaster like the buildings around it
     const facade = vary(pick(palette.plaster, hash(Math.floor(cx / 12), Math.floor(cz / 12))), h, 0.03);
+    // Some short wall pieces get a door (or frame) in the map's accent color: the bottom 2.4 m above the floor.
+    const accent = palette.accent;
+    if (accent && Math.min(w, d) <= 1 && Math.max(w, d) <= 2.5 && (h >>> 3) % 100 < accent.chance * 100) {
+      return { top: new THREE.Color(palette.wall), side: facade, band: { y: ground + 2.4, color: vary(accent.color, h, 0.05) } };
+    }
     return { top: new THREE.Color(palette.wall), side: facade };
   }
   if (rise >= 0.75) { // low wall, parapet, planter edge
     const wall = vary(palette.wall, h, 0.05);
     return { top: wall.clone().offsetHSL(0, 0, 0.06), side: wall.clone().offsetHSL(0, 0, -0.05) };
   }
-  // paving: alternating stone tones, a touch warmer on higher terraces so levels read apart
-  const stone = vary(pick(palette.paving, hash(Math.floor(cx / 2), Math.floor(cz / 2))), h, 0.03)
+  // paving: alternating stone tones (darker inside the map's marked zones, e.g. bombsites), a touch warmer on
+  // higher terraces so levels read apart
+  const zone = palette.zones?.find((zn) => Math.hypot(cx - zn.x, cz - zn.z) <= zn.r);
+  const stone = vary(pick(zone?.paving ?? palette.paving, hash(Math.floor(cx / 2), Math.floor(cz / 2))), h, 0.03)
     .offsetHSL(0, Math.min(b.max.y, 8) * 0.008, Math.min(b.max.y, 8) * 0.006);
   return { top: stone, side: new THREE.Color(palette.pavingSide) };
 }
@@ -98,25 +105,31 @@ function buildMergedBoxes(map) {
   colliders.forEach((b) => {
     const lo = [b.min.x, b.min.y, b.min.z];
     const hi = [b.max.x, b.max.y, b.max.z];
-    const { top, side } = boxColors(b, phys, palette);
-    for (const [axis, sign] of FACES) {
+    const { top, side, band } = boxColors(b, phys, palette);
+    const quad = (axis, sign, qlo, qhi, c) => {
       const u = (axis + 1) % 3;
       const v = (axis + 2) % 3;
       const base = pos.length / 3;
       for (const [cu, cv] of [[0, 0], [1, 0], [1, 1], [0, 1]]) {
         const p = [0, 0, 0];
-        p[axis] = sign > 0 ? hi[axis] : lo[axis];
-        p[u] = cu ? hi[u] : lo[u];
-        p[v] = cv ? hi[v] : lo[v];
+        p[axis] = sign > 0 ? qhi[axis] : qlo[axis];
+        p[u] = cu ? qhi[u] : qlo[u];
+        p[v] = cv ? qhi[v] : qlo[v];
         pos.push(...p);
         const n = [0, 0, 0];
         n[axis] = sign;
         nrm.push(...n);
-        const c = axis === 1 ? top : side;
         col.push(c.r, c.g, c.b);
       }
       if (sign > 0) idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
       else idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+    };
+    for (const [axis, sign] of FACES) {
+      if (axis === 1) quad(axis, sign, lo, hi, top);
+      else if (band && band.y > lo[1] && band.y < hi[1]) { // a door / frame painted on the bottom of the side
+        quad(axis, sign, lo, [hi[0], band.y, hi[2]], band.color);
+        quad(axis, sign, [lo[0], band.y, lo[2]], hi, side);
+      } else quad(axis, sign, lo, hi, side);
     }
     // the four top edges and four verticals: enough to read the shapes
     const [x0, y0, z0] = lo;

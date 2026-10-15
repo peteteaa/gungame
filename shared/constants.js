@@ -1,6 +1,7 @@
 // Shared game contract imported by both the server (Node) and the client (Vite).
 // Keep this file dependency-free so it runs unchanged in both environments (generated map data is plain JS).
 import piazzaData from './maps/piazza.js';
+import dust2Data from './maps/dust2.js';
 
 export const TICK_RATE = 30; // server simulation ticks per second
 export const MAX_PLAYERS_PER_ROOM = 8;
@@ -229,6 +230,36 @@ export const MAPS = {
         wall: 0xd9c7a8,
         wood: 0x8c5b34,
         crates: [0x9b6b3f, 0x3f8088, 0x6c7d45, 0xb0503a, 0x4d6a8f],
+      },
+    },
+  },
+  // Dust 2, traced from its official radar (shared/maps/dust2.js): Long A, Catwalk, Mid and Mid Doors, B Tunnels,
+  // both sites, with the radar's floor heights (T spawn and A high, CT and Mid low) and its crates.
+  dust2: {
+    name: 'Dust 2',
+    halfSize: 57.25,
+    wallHeight: 8,
+    boxes: unpackBoxes(dust2Data),
+    spawnPoints: dust2Data.spawnPoints,
+    dummySpot: dust2Data.spawnPoints[0],
+    theme: {
+      sky: 0x9fd0f2, ground: ['#cbb488', '#d4bf95'], wall: 0xd2b98b, fog: [55, 170],
+      // Sandstone walls with flat roofs and blue doors, sandy paving (darker on the bombsites), wooden, green and
+      // grey crates.
+      palette: {
+        plaster: [0xe2c99a, 0xd9bb85, 0xe9d5ad, 0xcfae78, 0xdcc395],
+        roof: 0xc6a56e,
+        paving: [0xcdb68a, 0xd8c497],
+        pavingSide: 0xa8916a,
+        wall: 0xd8c193,
+        wood: 0x7b5634,
+        crates: [0x9c6c3d, 0x8a5c33, 0xa97c48, 0x7f6a4f, 0x5f7a4a, 0x55704a, 0x7d8288, 0x6c7178],
+        accent: { color: 0x3d6f9e, chance: 0.3 }, // blue doors, frames and shutters
+        // Bombsites (positions from the radar overview): darker, cooler stone.
+        zones: [
+          { x: 34.3, z: -38.9, r: 9, paving: [0xa89a80, 0xb5a78b] }, // A
+          { x: -33.2, z: -43.5, r: 9, paving: [0xa89a80, 0xb5a78b] }, // B
+        ],
       },
     },
   },
