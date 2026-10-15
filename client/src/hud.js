@@ -11,7 +11,7 @@ export function createHud() {
     damage: $('damage'), death: $('death'), banner: $('banner'), bannerTitle: $('banner-title'),
     bannerSub: $('banner-sub'), disc: $('disconnected'), resume: $('resume'), ping: $('ping'), ammo: $('ammo'),
     board: $('scoreboard'), crosshair: $('crosshair'), scope: $('scope'), reddot: $('reddot'), burn: $('burn'),
-    chat: $('chat'), chatLog: $('chat-log'), chatInput: $('chat-input'),
+    chat: $('chat'), chatLog: $('chat-log'), chatInput: $('chat-input'), killMsg: $('killmsg'), deathMsg: $('death-msg'),
   };
   let toastTimer = 0;
   let damageTimer = 0;
@@ -26,6 +26,7 @@ export function createHud() {
   }
   const toastRef = { id: 0 };
   const damageRef = { id: 0 };
+  const killMsgRef = { id: 0 };
 
   return {
     enterGame() { show(el.start, false); show(el.hud, true); },
@@ -59,7 +60,8 @@ export function createHud() {
         const s = document.createElement('span');
         s.className = p.cls || '';
         s.textContent = p.text;
-        item.append(s, ' ');
+        item.append(s);
+        if (p.gap !== false) item.append(' ');
       }
       el.feed.append(item);
       while (el.feed.children.length > 6) el.feed.firstChild.remove();
@@ -95,7 +97,14 @@ export function createHud() {
       pulse(el.toast, 'on', 1800, toastRef);
     },
     flashDamage() { pulse(el.damage, 'on', 60, damageRef); },
-    setDead(on) { show(el.death, on); },
+    killMessage(text) {
+      el.killMsg.textContent = text;
+      pulse(el.killMsg, 'on', 2200, killMsgRef);
+    },
+    setDead(on, message = '') {
+      el.deathMsg.textContent = message;
+      show(el.death, on);
+    },
     setDisconnected(on) { show(el.disc, on); },
     setResume(on) { show(el.resume, on); },
     showBanner(title, restartIn) {

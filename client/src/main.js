@@ -8,6 +8,7 @@ import { buildWorld } from './world.js';
 import { createEffects } from './effects.js';
 import { createViewmodel, createRemotePlayer, preloadModels } from './weapons.js';
 import { createHud } from './hud.js';
+import { killMessage, killText } from './killMessages.js';
 
 const MOVE_SEND_MS = 1000 / 30;
 const FOV = 75;
@@ -167,13 +168,21 @@ net.on(EVENTS.PLAYER_HIT, (d) => {
 
 net.on(EVENTS.PLAYER_KILLED, (d) => {
   const self = (id) => (id === myId ? 'self' : '');
+  const killer = nameOf(d.killerId);
+  const victim = nameOf(d.victimId);
+  const msg = killMessage(d.weapon, d.headshot);
   hud.feed([
-    { text: nameOf(d.killerId), cls: `killer ${self(d.killerId)}` },
+    ...msg.map((p, i) => {
+      const gap = !msg[i + 1]?.text?.startsWith("'"); // "Bob's", not "Bob 's"
+      return p.role === 'k' ? { text: killer, cls: `killer ${self(d.killerId)}`, gap }
+        : p.role === 'v' ? { text: victim, cls: `victim ${self(d.victimId)}`, gap }
+        : { text: p.text.trim(), cls: 'verb' };
+    }),
     { text: `[${d.weapon}]`, cls: 'weapon' },
     ...(d.headshot ? [{ text: 'HEADSHOT', cls: 'headshot' }] : []),
-    { text: nameOf(d.victimId), cls: `victim ${self(d.victimId)}` },
   ]);
-  if (d.victimId === myId) { alive = false; hud.setDead(true); }
+  if (d.killerId === myId && d.victimId !== myId) hud.killMessage(killText(msg, killer, victim, 'k'));
+  if (d.victimId === myId) { alive = false; hud.setDead(true, killText(msg, killer, victim, 'v')); }
 });
 
 net.on(EVENTS.TIER_UPGRADE, (d) => {

@@ -46,11 +46,16 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d12; col
 .feed-item { background: rgba(10, 12, 18, 0.7); border-left: 3px solid #ffcf4a; padding: 4px 10px; font-size: 15px; }
 .feed-item .killer { color: #6cc4ff; } .feed-item .victim { color: #ff7a7a; } .feed-item .weapon { color: #ffcf4a; }
 .feed-item .self { text-decoration: underline; }
+.feed-item .verb { color: #e8ecf4; font-style: italic; }
 .feed-item .headshot { color: #ff5a5a; font-weight: bold; font-size: 12px; letter-spacing: 1px; }
 
 #toast { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font-size: 34px; font-weight: bold; color: #ffcf4a;
   opacity: 0; transition: opacity 0.4s; letter-spacing: 2px; }
 #toast.on { opacity: 1; transition: none; }
+#killmsg { position: absolute; left: 50%; top: 60%; transform: translateX(-50%); font-size: 20px; font-weight: bold; color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8); white-space: nowrap; opacity: 0; transition: opacity 0.5s; }
+#killmsg.on { opacity: 1; transition: none; }
+#death-msg { color: #ffd0d0; font-size: 22px; font-style: italic; }
 
 #damage { position: absolute; inset: 0; opacity: 0; transition: opacity 0.35s;
   background: radial-gradient(ellipse at center, rgba(255,0,0,0) 40%, rgba(220,0,0,0.75) 100%); }
