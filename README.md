@@ -103,8 +103,8 @@ on the top row: `#` building, `X` big crate, `x` climbable crate, `G` generator,
 platform, `D`/`A`/`s` spawn points, `T` the test dummy (only a player named `ggez` can kill it; `TEST_DUMMY=0` on the server removes it). Edit the grid and both client and server pick it up.
 The integration tests pin the server to the old `arena` layout (`test/use-arena-map.js`), so their positions stay valid.
 
-**Ascent XL** is Ascent at full size: the real map's lanes, terrain (raised floors, stairs, ramps, overhangs) and
-obstacles traced at 0.5 m into boxes (`shared/maps/ascentXL.js`, generated; boxes may have a base height `y`, spawns a
+**Piazza** is Ascent at full size, in its own colors: the real map's lanes, terrain (raised floors, stairs, ramps, overhangs) and
+obstacles traced at 0.5 m into boxes (`shared/maps/piazza.js`, generated; boxes may have a base height `y`, spawns a
 floor height `y`). Steps up to `PLAYER.stepHeight` are walked up, by players and bots alike.
 
 Players pick a map on the start screen (remembered; `?map=<id>` in the URL also works). Each room plays one map, so

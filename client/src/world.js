@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mapColliders } from '../../shared/constants.js';
+import { mapPhysics } from '../../shared/physics.js';
 
 function checkerTexture(map) {
   const c = document.createElement('canvas');
@@ -32,27 +33,72 @@ function addBox(group, min, max, color) {
   mesh.add(edges);
 }
 
-// Traced maps have thousands of boxes: draw them as one mesh (plus one set of outlines), colored by height so
-// terrain levels read at a glance: low ground and steps in stone tones, raised floors warmer, buildings in plaster.
+// Traced maps have thousands of boxes: draw them as one mesh (plus one set of outlines), each box colored by what it
+// most likely is, judged from its shape: tall blocks are buildings (plaster walls, roof on top), small raised ones are
+// beams, small blocks standing up to 2.5 m from the floor around them are crates, long low ones are walls, taller
+// ones facades, and the rest (including raised floors and bridges) is paving. Colors come from the map's theme.palette.
 const FACES = [ // [axis, sign] for +x, -x, +y, +z, -z (no bottoms: nothing is ever seen from below)
   [0, 1], [0, -1], [1, 1], [2, 1], [2, -1],
 ];
-function heightColor(top, i) {
-  const c = new THREE.Color();
-  if (top > 9) c.setHSL(0.07, 0.35, 0.72); // buildings
-  else c.setHSL(0.1 - Math.min(top, 9) * 0.006, 0.3, 0.56 + Math.min(top, 9) * 0.025);
-  return c.offsetHSL(0, 0, ((i * 2654435761) % 997) / 997 * 0.06 - 0.03);
+const DEFAULT_PALETTE = {
+  plaster: [0xd8c4a0], roof: 0xa0522d, paving: [0xa9a291, 0xb5ae9d], pavingSide: 0x857d70, wall: 0xc8b48f,
+  wood: 0x7a5232, crates: [0x8a6a45],
+};
+const hash = (a, b) => ((Math.imul(a | 0, 73856093) ^ Math.imul(b | 0, 19349663)) >>> 0);
+const pick = (list, h) => list[h % list.length];
+const vary = (hex, h, amount = 0.04) => new THREE.Color(hex).offsetHSL(0, 0, ((h % 1000) / 1000 - 0.5) * amount);
+
+function boxColors(b, phys, palette) {
+  const cx = (b.min.x + b.max.x) / 2;
+  const cz = (b.min.z + b.max.z) / 2;
+  const w = b.max.x - b.min.x;
+  const d = b.max.z - b.min.z;
+  const h = hash(Math.round(cx * 4), Math.round(cz * 4));
+  if (b.max.y > 8) { // building: one facade color per 12 m block of the city, roofs on top
+    const facade = vary(pick(palette.plaster, hash(Math.floor(cx / 12), Math.floor(cz / 12))), h, 0.03);
+    return { top: vary(palette.roof, h, 0.06), side: facade };
+  }
+  if (b.min.y > 0.5 && Math.max(w, d) < 2.5) { // beam, small balcony
+    const wood = vary(palette.wood, h);
+    return { top: wood.clone().offsetHSL(0, 0, 0.05), side: wood };
+  }
+  // How far this box stands above the floor right around it.
+  let ground = b.max.y;
+  phys.some(b.min.x - 1, b.min.z - 1, b.max.x + 1, b.max.z + 1, (c) => {
+    if (c.max.y < ground && c.max.x >= b.min.x - 1 && c.min.x <= b.max.x + 1 && c.max.z >= b.min.z - 1 && c.min.z <= b.max.z + 1) ground = c.max.y;
+  });
+  const rise = b.max.y - ground;
+  if (rise >= 0.75 && rise <= 2.5 && Math.max(w, d) <= 3) { // crate / cover
+    const crate = vary(pick(palette.crates, h), h, 0.06);
+    return { top: crate.clone().offsetHSL(0, 0, 0.06), side: crate };
+  }
+  if (rise > 2.5) { // pillar, low building, facade piece: plaster like the buildings around it
+    const facade = vary(pick(palette.plaster, hash(Math.floor(cx / 12), Math.floor(cz / 12))), h, 0.03);
+    return { top: new THREE.Color(palette.wall), side: facade };
+  }
+  if (rise >= 0.75) { // low wall, parapet, planter edge
+    const wall = vary(palette.wall, h, 0.05);
+    return { top: wall.clone().offsetHSL(0, 0, 0.06), side: wall.clone().offsetHSL(0, 0, -0.05) };
+  }
+  // paving: alternating stone tones, a touch warmer on higher terraces so levels read apart
+  const stone = vary(pick(palette.paving, hash(Math.floor(cx / 2), Math.floor(cz / 2))), h, 0.03)
+    .offsetHSL(0, Math.min(b.max.y, 8) * 0.008, Math.min(b.max.y, 8) * 0.006);
+  return { top: stone, side: new THREE.Color(palette.pavingSide) };
 }
-function buildMergedBoxes(colliders) {
+
+function buildMergedBoxes(map) {
+  const colliders = mapColliders(map);
+  const phys = mapPhysics(map);
+  const palette = { ...DEFAULT_PALETTE, ...map.theme?.palette };
   const pos = [];
   const nrm = [];
   const col = [];
   const idx = [];
   const lines = [];
-  colliders.forEach((b, i) => {
+  colliders.forEach((b) => {
     const lo = [b.min.x, b.min.y, b.min.z];
     const hi = [b.max.x, b.max.y, b.max.z];
-    const color = heightColor(b.max.y, i);
+    const { top, side } = boxColors(b, phys, palette);
     for (const [axis, sign] of FACES) {
       const u = (axis + 1) % 3;
       const v = (axis + 2) % 3;
@@ -66,8 +112,8 @@ function buildMergedBoxes(colliders) {
         const n = [0, 0, 0];
         n[axis] = sign;
         nrm.push(...n);
-        const shade = axis === 1 ? 1.08 : 0.92; // tops a little lighter than walls
-        col.push(color.r * shade, color.g * shade, color.b * shade);
+        const c = axis === 1 ? top : side;
+        col.push(c.r, c.g, c.b);
       }
       if (sign > 0) idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
       else idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
@@ -101,7 +147,7 @@ function buildBoxMap(map) {
   group.add(ground);
   const colliders = mapColliders(map);
   if (colliders.length > 500) {
-    group.add(buildMergedBoxes(colliders));
+    group.add(buildMergedBoxes(map));
     return group;
   }
   colliders.forEach((b, i) => {

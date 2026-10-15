@@ -67,22 +67,22 @@ test('players who pick different maps get different rooms', () => {
   const b = fakeSocket('b');
   const c = fakeSocket('c');
   server.join(a, 'A', 'ascent');
-  server.join(b, 'B', 'ascentXL');
-  server.join(c, 'C', 'ascentXL');
+  server.join(b, 'B', 'piazza');
+  server.join(c, 'C', 'piazza');
   assert.notEqual(server.roomOf(a), server.roomOf(b));
   assert.equal(server.roomOf(b), server.roomOf(c));
-  assert.equal(server.roomOf(b).map, MAPS.ascentXL);
-  assert.equal(b.sent.find((e) => e.event === EVENTS.JOINED).payload.map, 'ascentXL');
+  assert.equal(server.roomOf(b).map, MAPS.piazza);
+  assert.equal(b.sent.find((e) => e.event === EVENTS.JOINED).payload.map, 'piazza');
   server.join(fakeSocket('d'), 'D', 'no-such-map');
   assert.equal(server.roomOf({ id: 'd' }).map.id, 'arena', 'an unknown map falls back to the default');
   for (const room of server.rooms.values()) room.destroy();
 });
 
-test('on Ascent XL, bots climb the terrain and hunt down a human without clipping into it', () => {
+test('on Piazza, bots climb the terrain and hunt down a human without clipping into it', () => {
   const io = fakeIo();
-  const room = new Room('r', io, { bots: 3, map: MAPS.ascentXL });
+  const room = new Room('r', io, { bots: 3, map: MAPS.piazza });
   const human = room.addPlayer(fakeSocket('h1'), 'Target');
-  const phys = mapPhysics(MAPS.ascentXL);
+  const phys = mapPhysics(MAPS.piazza);
   const bots = [...room.players.values()].filter((p) => p.isBot);
   let now = Date.now();
   for (let i = 0; i < 30 * 120 && human.alive; i++) { // up to two minutes of simulated play

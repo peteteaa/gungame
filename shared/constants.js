@@ -1,6 +1,6 @@
 // Shared game contract imported by both the server (Node) and the client (Vite).
 // Keep this file dependency-free so it runs unchanged in both environments (generated map data is plain JS).
-import ascentXLData from './maps/ascentXL.js';
+import piazzaData from './maps/piazza.js';
 
 export const TICK_RATE = 30; // server simulation ticks per second
 export const MAX_PLAYERS_PER_ROOM = 8;
@@ -209,15 +209,28 @@ export const MAPS = {
     dummySpot: { x: 0, z: 10 },
   },
   // Ascent at full size: its lanes, terrain (raised floors, stairs, ramps) and obstacles traced at 0.5 m into boxes
-  // (shared/maps/ascentXL.js). Steps up to PLAYER.stepHeight are walked up. Defender spawn north, Attacker south.
-  ascentXL: {
-    name: 'Ascent XL',
+  // (shared/maps/piazza.js). Steps up to PLAYER.stepHeight are walked up. Defender spawn north, Attacker south.
+  piazza: {
+    name: 'Piazza',
     halfSize: 70,
     wallHeight: 20,
-    boxes: unpackBoxes(ascentXLData),
-    spawnPoints: ascentXLData.spawnPoints,
-    dummySpot: ascentXLData.spawnPoints[0],
-    theme: { sky: 0xa9cbe8, ground: ['#c9b48e', '#d3c09c'], wall: 0xbfa57c, fog: [45, 160] },
+    boxes: unpackBoxes(piazzaData),
+    spawnPoints: piazzaData.spawnPoints,
+    dummySpot: piazzaData.spawnPoints[0],
+    theme: {
+      sky: 0x8ec5ef, ground: ['#b9b2a5', '#c6bfb1'], wall: 0xcbb89a, fog: [60, 190],
+      // Colors for traced maps (see client/src/world.js): Venetian plaster facades, terracotta roofs, stone paving,
+      // wooden balconies and bridges, and crates in wood and tarp colors.
+      palette: {
+        plaster: [0xf0d9b5, 0xe8a987, 0xf2d98a, 0xe3906d, 0xcfdcc4, 0xf3ece0, 0xbcd5df, 0xe7b9b0],
+        roof: 0xb4552f,
+        paving: [0xbdb5a6, 0xccc3b2],
+        pavingSide: 0x968d7e,
+        wall: 0xd9c7a8,
+        wood: 0x8c5b34,
+        crates: [0x9b6b3f, 0x3f8088, 0x6c7d45, 0xb0503a, 0x4d6a8f],
+      },
+    },
   },
 };
 for (const [id, map] of Object.entries(MAPS)) map.id = id;
