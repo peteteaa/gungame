@@ -19,6 +19,7 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
   let pitch = 0;
   let grounded = true;
   let mouseDown = false;
+  let rightDown = false; // right mouse held: aim down sights, same as Q
   let pressed = false;
   let moving = false;
   let sprinting = false;
@@ -48,12 +49,17 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
     pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch - e.movementY * k));
   });
   canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 2) { if (isLocked()) rightDown = true; return; }
     if (e.button !== 0) return;
     if (!isLocked()) { requestLock(); return; }
     mouseDown = true;
     pressed = true;
   });
-  window.addEventListener('mouseup', (e) => { if (e.button === 0) mouseDown = false; });
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 0) mouseDown = false;
+    if (e.button === 2) rightDown = false;
+  });
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // right click aims, not opens a menu
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement) return; // typing in chat or the name box isn't movement
     if (e.code === 'Tab') { e.preventDefault(); onScoreboard(true); return; }
@@ -65,7 +71,7 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
     if (e.code === 'Tab') { e.preventDefault(); onScoreboard(false); return; }
     keys.delete(e.code);
   });
-  window.addEventListener('blur', () => { keys.clear(); mouseDown = false; onScoreboard(false); });
+  window.addEventListener('blur', () => { keys.clear(); mouseDown = false; rightDown = false; onScoreboard(false); });
 
   const overlapsXZ = (b) =>
     pos.x - PLAYER.radius < b.max.x && pos.x + PLAYER.radius > b.min.x &&
@@ -145,7 +151,7 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
     get moving() { return moving; },
     get sprinting() { return sprinting; },
     get crouching() { return crouching; },
-    get aimHeld() { return keys.has('KeyQ'); },
+    get aimHeld() { return rightDown || keys.has('KeyQ'); },
     set aiming(v) { aiming = v; },
     set sensitivityScale(v) { sensitivityScale = v; },
     consumePress() { const p = pressed; pressed = false; return p; },
