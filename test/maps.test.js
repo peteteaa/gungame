@@ -12,7 +12,7 @@ for (const [id, map] of Object.entries(MAPS)) {
     const points = [...map.spawnPoints, ...(map.dummySpot ? [map.dummySpot] : [])];
     assert.ok(map.spawnPoints.length >= 8, 'enough spawn points to spread a full room');
     for (const p of points) {
-      const box = playerAABB({ x: p.x, y: 0, z: p.z });
+      const box = playerAABB({ x: p.x, y: p.y ?? 0, z: p.z });
       assert.ok(Math.abs(p.x) <= map.halfSize - PLAYER.radius && Math.abs(p.z) <= map.halfSize - PLAYER.radius, `(${p.x}, ${p.z}) out of bounds`);
       assert.ok(!colliders.some((c) => overlaps(box, c)), `(${p.x}, ${p.z}) is inside a solid`);
     }

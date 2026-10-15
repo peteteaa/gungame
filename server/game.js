@@ -2,11 +2,11 @@
 import {
   EVENTS, MAX_PLAYERS_PER_ROOM, MAX_HEALTH, HEALTH_REGEN, RESPAWN_DELAY_MS, MATCH_RESTART_DELAY_MS,
   INTERPOLATION_DELAY_MS, MAX_REWIND_MS, PLAYER, MAP, FINAL_TIER, getWeapon,
-  rayAABB, mapColliders, playerAABB, HEADSHOT_MULTIPLIER, CONTRACT_VERSION, CHAT,
+  rayAABB, playerAABB, HEADSHOT_MULTIPLIER, CONTRACT_VERSION, CHAT, MULTI_KILL_WINDOW_MS, getMap,
 } from '../shared/constants.js';
+import { mapPhysics } from '../shared/physics.js';
 import { BOT_NAMES, botTaunt, updateBot } from './bots.js';
 
-const COLLIDERS = mapColliders();
 const HISTORY_MS = 1000; // position history kept per player for lag compensation
 const MOVE_TOLERANCE = 1.5; // multiplier on max speed to absorb network jitter
 const MOVE_BURST = 1.5; // max horizontal distance that can be banked while idle / packets bunch up
@@ -24,7 +24,6 @@ const GROUND_EPS = 0.1;
 const MAX_ORIGIN_DRIFT = 2.0; // how far a shot origin may be from the server's view of the shooter's eye
 const FIRE_RATE_TOLERANCE = 0.85; // accept shots slightly early to absorb jitter
 const RELOAD_TOLERANCE_MS = 100; // a shot may finish a reload this early (the client's timer starts before the server's)
-const MAX_Y = Math.max(...MAP.boxes.map((b) => b.h)) + 3;
 
 const isNum = (n) => typeof n === 'number' && Number.isFinite(n);
 const isVec = (v) => v && isNum(v.x) && isNum(v.y) && isNum(v.z);
@@ -53,11 +52,7 @@ function applySpread(dir, spread) {
 const overlapsXZ = (x, z, c, r) => x - r < c.max.x && x + r > c.min.x && z - r < c.max.z && z + r > c.min.z;
 
 // Would a player standing at (x, y, z) be inside any solid?
-function insideSolid(x, y, z) {
-  const r = PLAYER.radius - COLLIDE_INSET;
-  return COLLIDERS.some((c) => overlapsXZ(x, z, c, r)
-    && y < c.max.y - COLLIDE_INSET && y + PLAYER.height > c.min.y + COLLIDE_INSET);
-}
+const insideSolid = (phys, x, y, z) => phys.blocked(x, z, PLAYER.radius, y, y + PLAYER.height, COLLIDE_INSET);
 
 // Height above takeoff of a full-strength jump t seconds in.
 const arc = (t) => PLAYER.jumpVelocity * t - 0.5 * PLAYER.gravity * t * t;
@@ -71,18 +66,13 @@ function airCeiling(t) {
 }
 
 // Height of the highest surface under (x, z) at or below y.
-function surfaceBelow(x, y, z) {
-  let top = 0;
-  for (const c of COLLIDERS) {
-    if (c.max.y <= y + GROUND_EPS && c.max.y > top && overlapsXZ(x, z, c, PLAYER.radius)) top = c.max.y;
-  }
-  return top;
-}
+const surfaceBelow = (phys, x, y, z) => phys.surfaceBelow(x, y, z, PLAYER.radius, GROUND_EPS);
 
 // Is the player standing on the ground or on top of a box?
-function grounded(x, y, z) {
+function grounded(phys, x, y, z) {
   if (y <= GROUND_EPS) return true;
-  return COLLIDERS.some((c) => Math.abs(y - c.max.y) <= GROUND_EPS && overlapsXZ(x, z, c, PLAYER.radius));
+  const r = PLAYER.radius;
+  return phys.some(x - r, z - r, x + r, z + r, (c) => Math.abs(y - c.max.y) <= GROUND_EPS && overlapsXZ(x, z, c, r));
 }
 
 function sanitizeUsername(name) {
@@ -97,7 +87,6 @@ const TEST_DUMMY = process.env.TEST_DUMMY !== '0';
 const DUMMY_ID = 'dummy';
 const DUMMY_KILLER = 'ggez';
 const BURN_TICK_DAMAGE = 2; // burn damage lands in whole chunks of at least this much (fewer hit events)
-const DUMMY_SPOT = MAP.dummySpot ?? MAP.spawnPoints[0];
 // AI players that fill a room with few humans: BOT_COUNT with one human, one fewer per extra human. BOTS=0 disables.
 const BOT_COUNT = Math.max(0, Math.floor(Number(process.env.BOTS ?? 3))) || 0;
 
@@ -106,14 +95,20 @@ function newPlayer(id, username, now) {
     id, username,
     x: 0, y: 0, z: 0, ry: 0, rx: 0,
     tier: 1, health: MAX_HEALTH, alive: true, kills: 0, ammo: getWeapon(1).magSize, reloadingUntil: 0,
+    streak: 0, multiKill: 0, lastKillAt: 0,
     lastFireAt: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0, airStart: null, history: [], respawnTimer: null,
   };
 }
 
 export class Room {
-  constructor(id, io, { bots = BOT_COUNT } = {}) {
+  constructor(id, io, { bots = BOT_COUNT, map = MAP } = {}) {
     this.id = id;
     this.io = io;
+    this.map = map;
+    this.phys = mapPhysics(map);
+    // Highest a player can be: the tallest solid (not counting the perimeter walls) plus a jump.
+    this.maxY = this.phys.colliders.slice(0, -4).reduce((m, c) => Math.max(m, c.max.y), 0) + 3;
+    this.dummySpot = map.dummySpot ?? map.spawnPoints[0];
     this.players = new Map(); // socketId (or bot/dummy id) -> player
     this.matchActive = true;
     this.restartTimer = null;
@@ -143,10 +138,11 @@ export class Room {
   // Spawn point farthest from all living players (falls back to random when the room is empty).
   pickSpawn(excludeId) {
     const living = [...this.players.values()].filter((p) => p.alive && p.id !== excludeId);
-    if (!living.length) return MAP.spawnPoints[Math.floor(Math.random() * MAP.spawnPoints.length)];
-    let best = MAP.spawnPoints[0];
+    const spawns = this.map.spawnPoints;
+    if (!living.length) return spawns[Math.floor(Math.random() * spawns.length)];
+    let best = spawns[0];
     let bestDist = -1;
-    for (const s of MAP.spawnPoints) {
+    for (const s of spawns) {
       const d = Math.min(...living.map((p) => Math.hypot(p.x - s.x, p.z - s.z)));
       if (d > bestDist) { bestDist = d; best = s; }
     }
@@ -154,15 +150,16 @@ export class Room {
   }
 
   placeAt(p, spawn, now) {
-    Object.assign(p, { x: spawn.x, y: 0, z: spawn.z, ry: Math.atan2(spawn.x, spawn.z), rx: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: 0, airStart: null, burn: null, crouch: false });
+    const y = spawn.y ?? 0;
+    Object.assign(p, { x: spawn.x, y, z: spawn.z, ry: Math.atan2(spawn.x, spawn.z), rx: 0, lastMoveAt: now, moveBudget: MOVE_BURST, groundY: y, airStart: null, burn: null, crouch: false });
     p.history = [{ t: now, x: p.x, y: p.y, z: p.z, crouch: false }];
   }
 
-  spawnFor(p) { return p.isDummy ? DUMMY_SPOT : this.pickSpawn(p.id); }
+  spawnFor(p) { return p.isDummy ? this.dummySpot : this.pickSpawn(p.id); }
 
   addDummy(now = Date.now()) {
     const p = { ...newPlayer(DUMMY_ID, 'Dummy', now), isDummy: true };
-    this.placeAt(p, DUMMY_SPOT, now);
+    this.placeAt(p, this.dummySpot, now);
     this.players.set(p.id, p);
   }
 
@@ -171,7 +168,7 @@ export class Room {
     this.placeAt(p, this.pickSpawn(p.id), now);
     this.players.set(p.id, p);
     socket.join(this.id);
-    socket.emit(EVENTS.JOINED, { id: p.id, roomId: this.id, player: this.serialize(p), players: this.serializeAll(), serverTime: now, version: CONTRACT_VERSION });
+    socket.emit(EVENTS.JOINED, { id: p.id, roomId: this.id, map: this.map.id, player: this.serialize(p), players: this.serializeAll(), serverTime: now, version: CONTRACT_VERSION });
     socket.to(this.id).emit(EVENTS.PLAYER_JOINED, { player: this.serialize(p) });
     this.syncBots(now);
     return p;
@@ -231,12 +228,14 @@ export class Room {
 
     const y = Math.max(0, data.y);
     const horiz = Math.hypot(data.x - p.x, data.z - p.z);
-    const lim = MAP.halfSize - PLAYER.radius;
-    const inBounds = Math.abs(data.x) <= lim + 0.05 && Math.abs(data.z) <= lim + 0.05 && data.y >= -0.05 && data.y <= MAX_Y;
+    const lim = this.map.halfSize - PLAYER.radius;
+    const inBounds = Math.abs(data.x) <= lim + 0.05 && Math.abs(data.z) <= lim + 0.05 && data.y >= -0.05 && data.y <= this.maxY;
     const fallOk = p.y - y <= MAX_FALL_SPEED * dt + VERT_SLACK;
     // Gravity: while airborne, height is capped by the best possible jump arc from the takeoff surface.
+    // Walking up a step (stairs, curbs) lands on a surface at most stepHeight above where the player was.
     const airStart = p.airStart ?? Math.max(prevMoveAt, now - AIR_START_LOOKBACK_MS);
-    const gravityOk = y <= p.groundY + airCeiling((now - airStart) / 1000) + VERT_SLACK;
+    const stepUp = y > p.y && y - p.y <= PLAYER.stepHeight + VERT_SLACK && grounded(this.phys, data.x, y, data.z);
+    const gravityOk = stepUp || y <= p.groundY + airCeiling((now - airStart) / 1000) + VERT_SLACK;
 
     if (!inBounds || horiz > p.moveBudget || !fallOk || !gravityOk || this.sweepHitsSolid(p, data.x, y, data.z, horiz)) {
       this.applyGravity(p, now); // a hovering client is corrected to where it should have fallen to
@@ -245,7 +244,7 @@ export class Room {
     }
     p.moveBudget -= horiz;
     p.x = data.x; p.y = y; p.z = data.z;
-    if (grounded(p.x, p.y, p.z)) {
+    if (grounded(this.phys, p.x, p.y, p.z)) {
       p.groundY = p.y;
       p.airStart = null;
     } else {
@@ -258,7 +257,7 @@ export class Room {
     if (p.airStart === null || !p.alive) return;
     const ceiling = p.groundY + airCeiling((now - p.airStart) / 1000) + VERT_SLACK;
     if (p.y <= ceiling) return;
-    const floor = surfaceBelow(p.x, p.y, p.z);
+    const floor = surfaceBelow(this.phys, p.x, p.y, p.z);
     p.y = Math.max(floor, ceiling);
     if (p.y - floor <= GROUND_EPS) { // landed
       p.y = floor;
@@ -267,12 +266,13 @@ export class Room {
     }
   }
 
-  // Sample the straight path from the current position to the target for solid overlap.
+  // Sample the straight path from the current position to the target for solid overlap. A rising move is checked
+  // at its final height (lifted first, then across), so walking up a step doesn't clip the step's own edge.
   sweepHitsSolid(p, x, y, z, dist) {
     const steps = Math.max(1, Math.ceil(dist / SWEEP_STEP));
     for (let i = 1; i <= steps; i++) {
       const k = i / steps;
-      if (insideSolid(lerp(p.x, x, k), lerp(p.y, y, k), lerp(p.z, z, k))) return true;
+      if (insideSolid(this.phys, lerp(p.x, x, k), y > p.y ? y : lerp(p.y, y, k), lerp(p.z, z, k))) return true;
     }
     return false;
   }
@@ -332,11 +332,7 @@ export class Room {
     const ends = [];
     for (let i = 0; i < weapon.pellets; i++) {
       const dir = applySpread(aim, weapon.spread);
-      let maxT = weapon.range;
-      for (const c of COLLIDERS) {
-        const t = rayAABB(origin, dir, c.min, c.max);
-        if (t !== null && t < maxT) maxT = t;
-      }
+      let maxT = this.phys.raycast(origin, dir, weapon.range);
       if (dir.y < 0) maxT = Math.min(maxT, -origin.y / dir.y); // ground plane
 
       let hit = null;
@@ -445,7 +441,17 @@ export class Room {
     victim.health = 0;
     victim.burn = null;
     killer.kills++;
-    this.emit(EVENTS.PLAYER_KILLED, { victimId: victim.id, killerId: killer.id, weapon: weapon.name, headshot });
+    // multi = kills chained within MULTI_KILL_WINDOW_MS; streak = kills since the killer last died.
+    // endedStreak = the streak the victim just lost (for "shut down" callouts).
+    killer.multiKill = now - killer.lastKillAt <= MULTI_KILL_WINDOW_MS ? killer.multiKill + 1 : 1;
+    killer.lastKillAt = now;
+    killer.streak++;
+    const endedStreak = victim.streak;
+    Object.assign(victim, { streak: 0, multiKill: 0, lastKillAt: 0 });
+    this.emit(EVENTS.PLAYER_KILLED, {
+      victimId: victim.id, killerId: killer.id, weapon: weapon.name, headshot,
+      multi: killer.multiKill, streak: killer.streak, endedStreak,
+    });
     if (killer.isBot) this.say(killer, botTaunt(victim.username, weapon.name, headshot));
 
     // A burn can outlive the killer's flamethrower (they already moved up): it still kills, but only a kill with
@@ -484,7 +490,7 @@ export class Room {
     this.restartTimer = null;
     for (const p of this.players.values()) {
       // alive stays false until placed so unplaced players don't skew pickSpawn distances
-      Object.assign(p, { tier: 1, health: MAX_HEALTH, alive: false, kills: 0, lastFireAt: 0, respawnTimer: null });
+      Object.assign(p, { tier: 1, health: MAX_HEALTH, alive: false, kills: 0, lastFireAt: 0, respawnTimer: null, streak: 0, multiKill: 0, lastKillAt: 0 });
       this.refillAmmo(p);
     }
     for (const p of this.players.values()) {
@@ -525,16 +531,17 @@ export class GameServer {
     this.nextRoomId = 1;
   }
 
-  findOrCreateRoom() {
-    for (const room of this.rooms.values()) if (room.size < MAX_PLAYERS_PER_ROOM) return room;
-    const room = new Room(`room_${this.nextRoomId++}`, this.io);
+  // Each room plays one map; players who pick the same map share rooms until one fills up.
+  findOrCreateRoom(map) {
+    for (const room of this.rooms.values()) if (room.map === map && room.size < MAX_PLAYERS_PER_ROOM) return room;
+    const room = new Room(`room_${this.nextRoomId++}`, this.io, { map });
     this.rooms.set(room.id, room);
     return room;
   }
 
-  join(socket, username) {
+  join(socket, username, mapId) {
     this.leave(socket); // re-joining moves the socket rather than duplicating it
-    const room = this.findOrCreateRoom();
+    const room = this.findOrCreateRoom(getMap(mapId));
     room.addPlayer(socket, username);
     this.socketRoom.set(socket.id, room);
   }

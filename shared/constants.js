@@ -1,5 +1,6 @@
 // Shared game contract imported by both the server (Node) and the client (Vite).
-// Keep this file dependency-free so it runs unchanged in both environments.
+// Keep this file dependency-free so it runs unchanged in both environments (generated map data is plain JS).
+import ascentXLData from './maps/ascentXL.js';
 
 export const TICK_RATE = 30; // server simulation ticks per second
 export const MAX_PLAYERS_PER_ROOM = 8;
@@ -8,6 +9,8 @@ export const MAX_HEALTH = 100;
 export const HEALTH_REGEN = { delayMs: 4000, perSecond: 20 };
 export const RESPAWN_DELAY_MS = 2000;
 export const MATCH_RESTART_DELAY_MS = 8000;
+// Kills this close together chain into a multi-kill (double, triple, ...). A streak counts kills without dying.
+export const MULTI_KILL_WINDOW_MS = 4000;
 
 // Render remote players this far in the past so there are always two snapshots to lerp between.
 export const INTERPOLATION_DELAY_MS = 100;
@@ -26,6 +29,7 @@ export const PLAYER = {
   moveSpeed: 8, // units / second
   sprintSpeed: 12, // holding Shift while moving forward (not while firing)
   jumpVelocity: 7,
+  stepHeight: 0.55, // ledges up to this high are walked up (stairs, curbs) instead of blocking
   gravity: 20,
 };
 
@@ -64,7 +68,8 @@ export const HEADSHOT_MULTIPLIER = 2;
 export const getWeapon = (tier) => WEAPON_TIERS[Math.min(Math.max(tier, 1), FINAL_TIER) - 1];
 
 // ---- Maps ----
-// Ground is y = 0. Each box is an axis-aligned solid sitting on the ground: center (x, z), size (w, d), height h.
+// Ground is y = 0. Each box is an axis-aligned solid: center (x, z), size (w, d), height h, sitting on the ground
+// unless it has a base height y (overhangs, bridges). Spawn points may have a y for raised floors (default 0).
 
 // Maps can be drawn as ASCII, one character per MAP_CELL x MAP_CELL square, north (-z) on the top row.
 // Runs of the same solid tile merge into one box. Marker tiles are open ground.
@@ -109,6 +114,16 @@ function parseMap({ rows, ...rest }) {
     }
   }
   return { halfSize: half, boxes, spawnPoints, dummySpot, ...rest };
+}
+
+// Generated maps store boxes as flat [minX, minY, minZ, maxX, maxY, maxZ, ...] in `unit` meters.
+function unpackBoxes({ unit: u, boxes: a }) {
+  const out = [];
+  for (let i = 0; i < a.length; i += 6) {
+    const [x0, y0, z0, x1, y1, z1] = [a[i] * u, a[i + 1] * u, a[i + 2] * u, a[i + 3] * u, a[i + 4] * u, a[i + 5] * u];
+    out.push({ x: (x0 + x1) / 2, z: (z0 + z1) / 2, w: x1 - x0, d: z1 - z0, y: y0, h: y1 - y0 });
+  }
+  return out;
 }
 
 export const MAPS = {
@@ -164,8 +179,10 @@ export const MAPS = {
   }),
 
   // The original arena. Integration tests pin the server to it (WEBGUN_MAP=arena) so their positions stay valid.
+  // Not offered on the start screen.
   arena: {
     name: 'Arena',
+    listed: false,
     halfSize: 30, // playable area is [-30, 30] on x and z; perimeter walls sit just outside
     wallHeight: 4,
     boxes: [
@@ -191,23 +208,39 @@ export const MAPS = {
     ],
     dummySpot: { x: 0, z: 10 },
   },
+  // Ascent at full size: its lanes, terrain (raised floors, stairs, ramps) and obstacles traced at 0.5 m into boxes
+  // (shared/maps/ascentXL.js). Steps up to PLAYER.stepHeight are walked up. Defender spawn north, Attacker south.
+  ascentXL: {
+    name: 'Ascent XL',
+    halfSize: 70,
+    wallHeight: 20,
+    boxes: unpackBoxes(ascentXLData),
+    spawnPoints: ascentXLData.spawnPoints,
+    dummySpot: ascentXLData.spawnPoints[0],
+    theme: { sky: 0xa9cbe8, ground: ['#c9b48e', '#d3c09c'], wall: 0xbfa57c, fog: [45, 160] },
+  },
 };
+for (const [id, map] of Object.entries(MAPS)) map.id = id;
 
-// Ascent is the first map. A server process can be pinned to another layout with WEBGUN_MAP (tests only:
-// browsers always build the default, so a real server must not set it).
-export const MAP = MAPS[globalThis.process?.env?.WEBGUN_MAP] ?? MAPS.ascent;
+// Maps offered on the start screen, in order.
+export const MAP_LIST = Object.values(MAPS).filter((m) => m.listed !== false);
+// The map a room gets when a join doesn't name a valid one. A server process can pin it with WEBGUN_MAP (tests use
+// the arena so their positions stay valid).
+export const DEFAULT_MAP_ID = MAPS[globalThis.process?.env?.WEBGUN_MAP] ? globalThis.process.env.WEBGUN_MAP : 'ascent';
+export const MAP = MAPS[DEFAULT_MAP_ID];
+export const getMap = (id) => MAPS[id] ?? MAP;
 
 // Network event names (single source of truth for both sides).
 export const EVENTS = {
   // client -> server
-  JOIN_MATCH: 'joinMatch', // { username }
+  JOIN_MATCH: 'joinMatch', // { username, map }  map = a MAPS id
   PLAYER_MOVE: 'playerMove', // { x, y, z, ry, rx, crouch }
   FIRE_BULLET: 'fireBullet', // { origin: {x,y,z}, direction: {x,y,z}, time }  time = client's estimate of server clock
   PING: 'clientPing', // (clientTime, ack) -> ack(serverTime)
   RELOAD: 'reload', // (no payload) start reloading the current weapon
   CHAT_SEND: 'chatSend', // { text }
   // server -> client
-  JOINED: 'joined', // { id, roomId, player, players, serverTime }
+  JOINED: 'joined', // { id, roomId, map, player, players, serverTime, version }
   STATE_UPDATE: 'stateUpdate', // { players: { [id]: {id, username, x,y,z, ry, rx, tier, health, alive, kills, burning, crouch} }, serverTime }
   TIER_UPGRADE: 'tierUpgrade', // { id, newTier }
   SHOT_FIRED: 'shotFired', // { id, tier, origin, ends: [{x,y,z}] }  for tracers
@@ -253,8 +286,8 @@ export function mapColliders(map = MAP) {
   const h = map.wallHeight;
   const t = 1; // wall thickness
   const boxes = map.boxes.map((b) => ({
-    min: { x: b.x - b.w / 2, y: 0, z: b.z - b.d / 2 },
-    max: { x: b.x + b.w / 2, y: b.h, z: b.z + b.d / 2 },
+    min: { x: b.x - b.w / 2, y: b.y ?? 0, z: b.z - b.d / 2 },
+    max: { x: b.x + b.w / 2, y: (b.y ?? 0) + b.h, z: b.z + b.d / 2 },
   }));
   boxes.push(
     { min: { x: -s - t, y: 0, z: -s - t }, max: { x: s + t, y: h, z: -s } },
@@ -276,7 +309,7 @@ export function playerAABB(p) {
 // Fingerprint of everything client and server must agree on. The server sends it on join; a browser tab still
 // running an older build (e.g. it auto-reconnected after a server restart) reloads instead of playing a stale map.
 export const CONTRACT_VERSION = (() => {
-  const text = JSON.stringify({ MAP, WEAPON_TIERS, PLAYER, EVENTS, TICK_RATE });
+  const text = JSON.stringify({ MAPS, WEAPON_TIERS, PLAYER, EVENTS, TICK_RATE });
   let h = 0x811c9dc5; // FNV-1a
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
   return h.toString(36);

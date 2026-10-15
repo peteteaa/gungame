@@ -19,6 +19,7 @@ export function createNetwork() {
   let haveOffset = false;
   let pingMs = 0;
   let username = null;
+  let mapId = null;
 
   const serverNow = () => Date.now() + offset;
 
@@ -39,7 +40,7 @@ export function createNetwork() {
   }
 
   function sendJoin() {
-    if (username !== null && socket.connected) socket.emit(EVENTS.JOIN_MATCH, { username });
+    if (username !== null && socket.connected) socket.emit(EVENTS.JOIN_MATCH, { username, map: mapId });
   }
 
   socket.on('connect', () => {
@@ -103,7 +104,7 @@ export function createNetwork() {
     get pingMs() { return pingMs; },
     get connected() { return socket.connected; },
     on: (event, fn) => socket.on(event, fn),
-    join(name) { username = name; sendJoin(); },
+    join(name, map) { username = name; mapId = map; sendJoin(); },
     emitMove: (p) => socket.volatile.emit(EVENTS.PLAYER_MOVE, p),
     emitReload: () => socket.emit(EVENTS.RELOAD),
     emitChat: (text) => socket.emit(EVENTS.CHAT_SEND, { text }),

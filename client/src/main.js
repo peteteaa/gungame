@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import {
-  CONTRACT_VERSION, EVENTS, INTERPOLATION_DELAY_MS, FINAL_TIER, MAX_HEALTH, PLAYER, getWeapon, rayAABB, mapColliders,
+  CONTRACT_VERSION, EVENTS, INTERPOLATION_DELAY_MS, FINAL_TIER, MAX_HEALTH, PLAYER, getWeapon, MAP, MAP_LIST, getMap,
 } from '../../shared/constants.js';
+import { mapPhysics } from '../../shared/physics.js';
 import { createNetwork, lerpAngle } from './network.js';
 import { createControls } from './controls.js';
-import { buildWorld } from './world.js';
+import { createWorld } from './world.js';
 import { createEffects } from './effects.js';
 import { createViewmodel, createRemotePlayer, preloadModels } from './weapons.js';
 import { createHud } from './hud.js';
-import { killMessage, killText } from './killMessages.js';
+import { killMessage, killText, multiKillName, streakName, SHUTDOWN_STREAK } from './killMessages.js';
 
 const MOVE_SEND_MS = 1000 / 30;
 const FOV = 75;
@@ -27,7 +28,7 @@ document.getElementById('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, 0.05, 300);
-buildWorld(scene);
+const world = createWorld(scene);
 
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -127,6 +128,7 @@ net.on(EVENTS.JOINED, (data) => {
     }
     console.warn(`client build ${CONTRACT_VERSION} differs from server ${data.version}`);
   }
+  if (data.map && data.map !== currentMap.id) loadMap(getMap(data.map)); // the server picked another map
   myId = data.id;
   joined = true;
   net.syncClock(data.serverTime);
@@ -182,8 +184,30 @@ net.on(EVENTS.PLAYER_KILLED, (d) => {
     ...(d.headshot ? [{ text: 'HEADSHOT', cls: 'headshot' }] : []),
   ]);
   if (d.killerId === myId && d.victimId !== myId) hud.killMessage(killText(msg, killer, victim, 'k'));
+  showStreaks(d, killer, victim);
   if (d.victimId === myId) { alive = false; hud.setDead(true, killText(msg, killer, victim, 'v')); }
 });
+
+// Multi-kill / kill streak callouts: a big announcement for the killer, a feed line for everyone.
+function showStreaks(d, killer, victim) {
+  const multi = multiKillName(d.multi);
+  const spree = streakName(d.streak);
+  const mine = d.killerId === myId;
+  if (multi || spree) {
+    if (mine) hud.announce(multi ?? spree, multi && spree ? `${spree} · ${d.streak} kill streak` : d.streak >= 3 ? `${d.streak} kill streak` : '');
+    for (const title of [multi, spree].filter(Boolean)) {
+      hud.feed([{ text: killer, cls: `killer ${mine ? 'self' : ''}` }, { text: title, cls: 'streak' }]);
+    }
+  }
+  if (d.endedStreak >= SHUTDOWN_STREAK) {
+    hud.feed([
+      { text: killer, cls: `killer ${mine ? 'self' : ''}` },
+      { text: 'shut down', cls: 'verb' },
+      { text: victim, cls: `victim ${d.victimId === myId ? 'self' : ''}`, gap: false },
+      { text: `'s ${d.endedStreak} kill streak`, cls: 'streak' },
+    ]);
+  }
+}
 
 net.on(EVENTS.TIER_UPGRADE, (d) => {
   if (d.id !== myId) return;
@@ -234,10 +258,43 @@ net.on(EVENTS.PLAYER_LEFT, (d) => {
   removeRemote(d.id);
 });
 
+// ---- Maps ----
+// The start screen lists MAP_LIST; the choice is remembered.
+let currentMap = MAP;
+const MAP_KEY = 'webgun-map';
+const storedMap = (() => { try { return localStorage.getItem(MAP_KEY); } catch { return null; } })();
+let selectedMap = getMap(new URLSearchParams(window.location.search).get('map') ?? storedMap ?? MAP.id);
+
+function loadMap(map) {
+  world.setMap(map);
+  controls.setMap(map);
+  currentMap = map;
+}
+
+const mapsEl = document.getElementById('maps');
+function renderMapPicker() {
+  mapsEl.replaceChildren(...MAP_LIST.map((m) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = m.name;
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(m === selectedMap));
+    b.addEventListener('click', () => {
+      selectedMap = m;
+      try { localStorage.setItem(MAP_KEY, m.id); } catch { /* private mode */ }
+      renderMapPicker();
+      loadMap(m);
+    });
+    return b;
+  }));
+}
+renderMapPicker();
+loadMap(selectedMap);
+
 // ---- Join flow ----
 function startGame(name) {
   username = name.trim().slice(0, 16) || 'Player';
-  net.join(username);
+  net.join(username, currentMap.id);
   if (!joined) hud.enterGame();
   controls.requestLock();
 }
@@ -307,7 +364,6 @@ if (autojoin) startGame(autojoin);
 // Left, Right, Up, Down, A, B, Enter toggles an aimbot for this player: each shot snaps the view to the head of the
 // visible enemy nearest the crosshair, within the weapon's range. Shots still go through the server's usual checks.
 const CHEAT_CODE = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyA', 'KeyB', 'Enter'];
-const COLLIDERS = mapColliders();
 let cheatProgress = 0;
 let aimbot = false;
 window.addEventListener('keydown', (e) => {
@@ -337,7 +393,7 @@ function snapAim(eye, dir) {
     to.x /= dist; to.y /= dist; to.z /= dist;
     const cos = to.x * dir.x + to.y * dir.y + to.z * dir.z;
     if (cos <= bestCos) continue;
-    if (COLLIDERS.some((c) => { const t = rayAABB(eye, to, c.min, c.max); return t !== null && t < dist; })) continue;
+    if (mapPhysics(currentMap).raycast(eye, to, dist) < dist) continue;
     best = to;
     bestCos = cos;
   }

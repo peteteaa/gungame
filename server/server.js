@@ -30,7 +30,7 @@ export function startServer({ port = Number(process.env.PORT) || 3000, clientOri
   }
 
   io.on('connection', (socket) => {
-    socket.on(EVENTS.JOIN_MATCH, (data) => game.join(socket, data?.username));
+    socket.on(EVENTS.JOIN_MATCH, (data) => game.join(socket, data?.username, data?.map));
     socket.on(EVENTS.PLAYER_MOVE, (data) => game.roomOf(socket)?.handleMove(socket, data));
     socket.on(EVENTS.FIRE_BULLET, (data) => game.roomOf(socket)?.handleFire(socket, data));
     socket.on(EVENTS.RELOAD, () => game.roomOf(socket)?.handleReload(socket));

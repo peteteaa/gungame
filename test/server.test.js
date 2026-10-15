@@ -100,7 +100,9 @@ test('pistol kills in 3 shots, awards a tier upgrade, then the victim respawns',
   const upgrade = once(b.socket, EVENTS.TIER_UPGRADE);
   const respawn = once(b.socket, EVENTS.PLAYER_RESPAWN, 4000);
   fireAt(a.socket, { x: 10, z: 5 }, { x: 0, y: 0, z: -1 });
-  assert.deepEqual(await killed, { victimId: b.joined.id, killerId: a.joined.id, weapon: 'Pistol', headshot: false });
+  assert.deepEqual(await killed, {
+    victimId: b.joined.id, killerId: a.joined.id, weapon: 'Pistol', headshot: false, multi: 1, streak: 1, endedStreak: 0,
+  });
   assert.deepEqual(await upgrade, { id: a.joined.id, newTier: 2 });
   const r = await respawn;
   assert.equal(r.id, b.joined.id);

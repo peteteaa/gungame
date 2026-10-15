@@ -3,6 +3,7 @@ import { WEAPON_TIERS } from '../../shared/constants.js';
 // Funny kill lines. {k} = killer, {v} = victim. Each line must still read right with "You" as the killer
 // (shown to the killer) and "you" as the victim (shown on the death screen).
 const GENERIC = [
+  '{k} put {v} on a t shirt',
   '{k} uninstalled {v}',
   '{k} sent {v} to the shadow realm',
   '{k} deleted {v}',
@@ -82,3 +83,13 @@ export function killText(parts, killer, victim, me) {
   s = s.replace(/\0's/g, 'your').replace(/\0/g, 'you');
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+// Multi-kills: kills chained within MULTI_KILL_WINDOW_MS of each other. Past the end of the list it stays on the last one.
+const MULTI_KILLS = ['DOUBLE KILL', 'TRIPLE KILL', 'QUAD KILL', 'PENTA KILL', 'KILLIMANJARO', 'KILLIONAIRE'];
+export const multiKillName = (n) => (n >= 2 ? MULTI_KILLS[Math.min(n, MULTI_KILLS.length + 1) - 2] : null);
+
+// Streaks: kills without dying. Called out when a streak reaches one of these counts.
+const STREAKS = { 3: 'KILLING SPREE', 5: 'RAMPAGE', 7: 'UNSTOPPABLE', 10: 'GODLIKE', 15: 'LEGENDARY', 20: 'TOUCH GRASS' };
+export const streakName = (n) => STREAKS[n] ?? null;
+// Losing a streak this long gets a "shut down" line in the feed.
+export const SHUTDOWN_STREAK = 3;

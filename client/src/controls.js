@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { PLAYER, mapColliders } from '../../shared/constants.js';
+import { PLAYER, MAP } from '../../shared/constants.js';
+import { mapPhysics } from '../../shared/physics.js';
 
 const MAX_DT = 0.05;
 const MAX_PITCH = (89 * Math.PI) / 180;
@@ -8,10 +9,12 @@ const ADS_MOVE_SCALE = 0.6; // walking speed while aiming down sights
 // Ctrl crouches; C too, because Ctrl+W closes the tab on Windows/Linux and pages can't block it.
 const CROUCH_KEYS = ['ControlLeft', 'ControlRight', 'KeyC'];
 const EPS = 1e-4;
+const MAX_FALL_STEP = 0.2; // vertical moves are split into steps no larger than this, so thin floors can't be skipped
 
 // Pointer lock, keyboard/mouse input and client-side movement prediction against the static map.
 export function createControls(canvas, camera, { onLockChange, onScoreboard, onReload }) {
-  const colliders = mapColliders();
+  let phys = mapPhysics(MAP);
+  let stepLift = 0; // camera lag after walking up a step, eased back to 0 so stairs don't jolt the view
   const pos = { x: 0, y: 0, z: 0 }; // feet
   const vel = { x: 0, y: 0, z: 0 };
   const keys = new Set();
@@ -77,23 +80,49 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
     pos.x - PLAYER.radius < b.max.x && pos.x + PLAYER.radius > b.min.x &&
     pos.z - PLAYER.radius < b.max.z && pos.z + PLAYER.radius > b.min.z;
   const overlapsY = (b) => pos.y < b.max.y - EPS && pos.y + PLAYER.height > b.min.y + EPS;
+  // Calls fn for every collider overlapping the player right now.
+  const eachHit = (fn) => {
+    const r = PLAYER.radius;
+    phys.some(pos.x - r, pos.z - r, pos.x + r, pos.z + r, (b) => { if (overlapsXZ(b) && overlapsY(b)) fn(b); });
+  };
+  const anyHit = () => {
+    const r = PLAYER.radius;
+    return phys.some(pos.x - r, pos.z - r, pos.x + r, pos.z + r, (b) => overlapsXZ(b) && overlapsY(b));
+  };
 
   function moveAxis(axis, delta) {
     if (delta === 0) return;
     pos[axis] += delta;
-    for (const b of colliders) {
-      if (!overlapsXZ(b) || !overlapsY(b)) continue;
-      pos[axis] = delta > 0 ? b.min[axis] - PLAYER.radius - EPS : b.max[axis] + PLAYER.radius + EPS;
+    // Walking into something low (a stair, a curb) steps up onto it when there's room on top.
+    if (grounded) {
+      let lift = 0;
+      let steppable = true;
+      eachHit((b) => {
+        if (b.max.y - pos.y <= PLAYER.stepHeight) lift = Math.max(lift, b.max.y - pos.y);
+        else steppable = false;
+      });
+      if (lift > 0 && steppable) {
+        pos.y += lift + EPS;
+        if (!anyHit()) { stepLift += lift; return; }
+        pos.y -= lift + EPS;
+      }
     }
+    eachHit((b) => {
+      pos[axis] = delta > 0 ? b.min[axis] - PLAYER.radius - EPS : b.max[axis] + PLAYER.radius + EPS;
+    });
   }
 
   function moveY(delta) {
-    pos.y += delta;
     grounded = false;
-    for (const b of colliders) {
-      if (!overlapsXZ(b) || !overlapsY(b)) continue;
-      if (delta <= 0) { pos.y = b.max.y; grounded = true; } else { pos.y = b.min.y - PLAYER.height - EPS; }
-      vel.y = 0;
+    const steps = Math.max(1, Math.ceil(Math.abs(delta) / MAX_FALL_STEP));
+    for (let i = 0; i < steps && !grounded; i++) {
+      pos.y += delta / steps;
+      let hit = false;
+      eachHit((b) => {
+        if (delta <= 0) { pos.y = b.max.y; grounded = true; } else { pos.y = b.min.y - PLAYER.height - EPS; }
+        hit = true;
+      });
+      if (hit) { vel.y = 0; if (delta > 0) break; }
     }
     if (pos.y <= 0) { pos.y = 0; vel.y = 0; grounded = true; }
   }
@@ -117,6 +146,7 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
       : crouching ? PLAYER.crouchSpeed
       : PLAYER.moveSpeed * (aiming ? ADS_MOVE_SCALE : 1);
     eyeHeight += ((crouching ? PLAYER.crouchEyeHeight : PLAYER.eyeHeight) - eyeHeight) * Math.min(1, dt * 14);
+    stepLift *= Math.max(0, 1 - dt * 18);
     vel.x = (-sin * f + cos * r) * speed;
     vel.z = (-cos * f - sin * r) * speed;
     moving = enabled && (f !== 0 || r !== 0) && grounded;
@@ -130,7 +160,7 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
   }
 
   function syncRig() {
-    rig.position.set(pos.x, pos.y + eyeHeight, pos.z);
+    rig.position.set(pos.x, pos.y + eyeHeight - stepLift, pos.z);
     rig.rotation.y = yaw;
     pitchObj.rotation.x = pitch;
   }
@@ -138,11 +168,13 @@ export function createControls(canvas, camera, { onLockChange, onScoreboard, onR
   function teleport(x, y, z) {
     pos.x = x; pos.y = y; pos.z = z;
     vel.x = vel.y = vel.z = 0;
+    stepLift = 0;
     syncRig();
   }
 
   return {
     rig, pos, update, teleport, isLocked, requestLock,
+    setMap(map) { phys = mapPhysics(map); },
     get yaw() { return yaw; },
     get pitch() { return pitch; },
     set yaw(v) { yaw = v; },

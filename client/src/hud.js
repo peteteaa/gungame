@@ -12,6 +12,7 @@ export function createHud() {
     bannerSub: $('banner-sub'), disc: $('disconnected'), resume: $('resume'), ping: $('ping'), ammo: $('ammo'),
     board: $('scoreboard'), crosshair: $('crosshair'), scope: $('scope'), reddot: $('reddot'), burn: $('burn'),
     chat: $('chat'), chatLog: $('chat-log'), chatInput: $('chat-input'), killMsg: $('killmsg'), deathMsg: $('death-msg'),
+    streak: $('streak'), streakTitle: $('streak-title'), streakSub: $('streak-sub'),
   };
   let toastTimer = 0;
   let damageTimer = 0;
@@ -27,6 +28,7 @@ export function createHud() {
   const toastRef = { id: 0 };
   const damageRef = { id: 0 };
   const killMsgRef = { id: 0 };
+  const streakRef = { id: 0 };
 
   return {
     enterGame() { show(el.start, false); show(el.hud, true); },
@@ -100,6 +102,12 @@ export function createHud() {
     killMessage(text) {
       el.killMsg.textContent = text;
       pulse(el.killMsg, 'on', 2200, killMsgRef);
+    },
+    // Big multi-kill / streak callout for the local player.
+    announce(title, sub = '') {
+      el.streakTitle.textContent = title;
+      el.streakSub.textContent = sub;
+      pulse(el.streak, 'on', 2200, streakRef);
     },
     setDead(on, message = '') {
       el.deathMsg.textContent = message;

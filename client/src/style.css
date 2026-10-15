@@ -47,6 +47,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d12; col
 .feed-item .killer { color: #6cc4ff; } .feed-item .victim { color: #ff7a7a; } .feed-item .weapon { color: #ffcf4a; }
 .feed-item .self { text-decoration: underline; }
 .feed-item .verb { color: #e8ecf4; font-style: italic; }
+.feed-item .streak { color: #ff8a2a; font-weight: bold; letter-spacing: 1px; }
 .feed-item .headshot { color: #ff5a5a; font-weight: bold; font-size: 12px; letter-spacing: 1px; }
 
 #toast { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font-size: 34px; font-weight: bold; color: #ffcf4a;
@@ -55,6 +56,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d12; col
 #killmsg { position: absolute; left: 50%; top: 60%; transform: translateX(-50%); font-size: 20px; font-weight: bold; color: #fff;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8); white-space: nowrap; opacity: 0; transition: opacity 0.5s; }
 #killmsg.on { opacity: 1; transition: none; }
+#streak { position: absolute; left: 50%; top: 30%; transform: translateX(-50%) scale(0.9); text-align: center; pointer-events: none;
+  opacity: 0; transition: opacity 0.6s, transform 0.6s; }
+#streak.on { opacity: 1; transform: translateX(-50%) scale(1); transition: none; animation: streak-pop 0.35s ease-out; }
+@keyframes streak-pop { from { transform: translateX(-50%) scale(1.6); } to { transform: translateX(-50%) scale(1); } }
+#streak-title { font-size: 44px; font-weight: 900; letter-spacing: 3px; color: #ff8a2a; white-space: nowrap;
+  text-shadow: 0 0 12px rgba(255, 90, 0, 0.7), 0 3px 6px rgba(0, 0, 0, 0.8); }
+#streak-sub { font-size: 16px; font-weight: bold; color: #ffe0b0; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8); }
 #death-msg { color: #ffd0d0; font-size: 22px; font-style: italic; }
 
 #damage { position: absolute; inset: 0; opacity: 0; transition: opacity 0.35s;
@@ -84,6 +92,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d12; col
 #start input { margin-top: 18px; width: 260px; padding: 12px 14px; font-size: 20px; text-align: center; color: #fff;
   background: #151925; border: 3px solid #3a4052; outline: none; font-family: inherit; user-select: text; }
 #start input:focus { border-color: #ffcf4a; }
+#maps { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 4px 0 6px; }
+#maps button { padding: 8px 16px; font-size: 16px; font-family: inherit; cursor: pointer; color: #c4cbda;
+  background: rgba(255, 255, 255, 0.06); border: 2px solid rgba(255, 255, 255, 0.15); border-radius: 6px; }
+#maps button[aria-checked="true"] { color: #1a1406; background: #ffcf4a; border-color: #ffcf4a; font-weight: bold; }
 #play { margin-top: 6px; padding: 12px 56px; font-size: 22px; font-weight: bold; cursor: pointer; font-family: inherit;
   color: #111; background: #ffcf4a; border: 3px solid #000; box-shadow: 0 5px 0 #8a6b12; }
 #play:active { transform: translateY(3px); box-shadow: 0 2px 0 #8a6b12; }
